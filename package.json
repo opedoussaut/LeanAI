@@ -1,0 +1,16 @@
+{
+  "name": "leanai",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "LeanAI — Less noise. Less cost. More value. An interactive demonstrator of MCP, A2A, lean data preparation and AI economics.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "test": "node --test",
+    "build": "node scripts/build.mjs"
+  }
+}
