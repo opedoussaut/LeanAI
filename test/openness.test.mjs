@@ -92,3 +92,13 @@ test('grooming explanations are derived from the run and agree with the pipeline
   assert.ok(Math.abs(w.perCdu.reduce((a, p) => a + p.meanKw, 0) - w.heatKw) <= 0.11, 'window heat = sum of CDU means');
   assert.equal(ex.rank.table.reduce((a, t) => a + t.kept, 0), ex.counts.rank);
 });
+
+test('value explainer reproduces the estimated value and its break-even', async () => {
+  const { valueModel } = await import('../src/ui/value.js');
+  const { run, metrics, value } = await runOnce();
+  const o = run.recommendation.outcome, vm = valueModel(sc.value, o.gpus, metrics.totals.totalCost);
+  assert.ok(Math.abs(vm.total - value.total) < 1e-9, `${vm.total} vs ${value.total}`);
+  assert.equal(vm.gpuHours, sc.value.daysEarlier * 24 * o.gpus);
+  const pess = valueModel({ ...sc.value, daysEarlier: 0 }, o.gpus, metrics.totals.totalCost);
+  assert.ok(pess.total > 0 && pess.ratio > 1, 'still worth it with no earlier go-live');
+});
