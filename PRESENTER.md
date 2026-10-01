@@ -1,6 +1,4 @@
-# LeanAI · 14-minute presenter script
-
-*Less noise. Less cost. More value.*
+# LeanAI · presenter script
 
 **Jargon help:** every technical term in the application (p95, MCP, A2A, token, CDU, headroom, checkpoint…) has a dotted underline. Hover, focus or tap it to show a plain-language definition. The **? Glossary** button at the top right lists all terms — useful when someone in the audience asks.
 
@@ -11,11 +9,22 @@ Run locally (`npm start`, http://127.0.0.1:3000). Set speed to **1×** for narra
 ## 0:00–2:30 · Learn
 
 - Hero: *Open. Lean. Orchestrate. Measure.* — one line per word.
-- **MCP**: toggle *Without MCP / With MCP*. “3 agents × 5 systems = 15 custom integrations; with MCP, 8 standard connections.”
-- **A2A**: point at the sample message. “One sentence and the data. No essays.”
+- **Open at the agent layer**: toggle *Open at the tool / Open at the agent*. “Opened at the tool, any AI must learn 9 tools, sequence 10 calls and read ≈2,000 tokens of definitions and raw results — that is how brute force starts. Opened at the agent, you state one goal and 4 governed agents answer in ≈236 tokens. MCP is still there — inside each agent.”
+- **Why MCP still matters, behind the agents**: in *Open at the agent* mode, flip *Behind the agents: Custom connectors / MCP standard*. “Without a standard, 4 agents × 5 systems = up to 20 custom connectors. With MCP, 9 standard connections: each system wrapped once, one protocol, discovered and called the same way — Power already serves two agents through one server. MCP is the shared plumbing; the open door is the agent.”
+- **Hybrid team**: point at the sample message and the people paragraph. “Agents exchange one sentence and the data. People keep collaborating with people — and they approve."
 - **Lean**: “11,825 raw records become 60 — in milliseconds, with no AI at all.”
   Optional (+2 min): click a step in the pipeline card, or scroll to **Inside the lean pipeline**, and walk the six steps with the *Next* button. Best three for a non-expert audience: **Normalize** (85.6 °F → 29.78 °C; heat computed with flow × density × specific heat × ΔT), **Aggregate** (16 readings → one 15-minute value, 97 windows → one p95), **Rank** (explicit rules with scores; 0.55 threshold). In the live demo, clicking a step in the Lean context pipeline opens the same worked example.
 - **Measure**: “Every token, call and euro is counted per agent.”
+
+- **Five attributes** (under the hero): click a card to open its evidence panel — the principle, what the demo shows and how each figure is obtained, where to see it, one sentence to say, and what the demo does not prove. Suggested one-liners:
+  - *Transformative* — “Not the old study done faster: a check we can now afford on every rack, every time.”
+  - *Scientific* — “Every figure behind the decision was computed by physics and site rules, and verified again. None was generated.”
+  - *Actionable* — “A go with one condition, 4 actions and 3 named people who approved it.”
+  - *Open* — “Open at the agent, and the right model for each job.”
+  - *Trusted* — “Every call, figure and approval can be opened, checked and exported.”
+  Always say the limit when asked: full simulation not run in the live demo (the Engineering page shows the MBSE step); actions approved, not executed; data residency not shown.
+- **Family → Competence → Skill**: “Engineering agent, Mechanical Engineer, skill *Calculate cooling headroom*. People work with agents and their competences; skills run inside, through MCP.” The science family is listed as not involved in this decision.
+- **Three foundations** (before the architecture): knowledge, physics, reasoning, with what the demo measured in each. Say the foundation 2 caveat out loud: here physics is a formula; in production it is full simulation against the system model.
 
 ## 2:30–3:30 · The question
 
@@ -25,17 +34,21 @@ Live demo. Read the request: *Can Loop A take a new 120 kW AI rack on Thursday?*
 
 Start. Pause after the raw total: “≈760k tokens if we sent it all to a model.” Resume through the six stages; the gauge fills with the **measured** p95 (869 kW) and turns red: 13 kW short. “That number was computed from CDU flow and temperature — no model involved.” Point at **99.6 % context reduction**.
 
-## 5:30–9:00 · Orchestrate (MCP blue, A2A violet)
+## 5:30–9:00 · Orchestrate (people amber, A2A violet, MCP blue)
+
+- Top row of the canvas: three **people**. The Program Owner assigns the goal; later the Cluster Ops Lead and the Facility Manager coordinate and approve (amber). The dotted line separates the open layer (A2A) from what is inside each agent (MCP).
 
 - Discovery: agents ask each system “what can you do?” (`tools/list`).
 - Deployment: three MCP calls — spec, loop, busway. Space and power OK. It **delegates** cooling (violet).
 - Cooling: `getLoopHeatLoad`, then `calculateCoolingHeadroom` — “the arithmetic runs in a tool, not in the model.” Result: short. Two A2A messages: objection to the orchestrator, request to Workload.
 - Workload: jobs, rack power, idle capacity → proposes moving `ft-sweep-17`. Critical jobs untouched.
+- Before the job moves, Workload asks the **Cluster Ops Lead** for approval; the Lead checks with the **Facility Manager**, then approves.
 - Cooling **re-checks with the same tool**: +25.6 kW. The gauge turns green.
+- **Loop engineering** panel (below the canvas): “Iteration 1 failed the acceptance test by 13.1 kW, so the loop corrected; iteration 2 passed, so it stopped — 2 of 3 budgeted iterations, with a hand-over to the Facility Manager if it had not converged.” Working definition, to be aligned with R&D; next step: graph engineering.
 
 ## 9:00–10:00 · Decision
 
-Recommendation panel: conditional approval, the disagreement and its resolution, burn-in 01:00–07:00 for lower carbon.
+Recommendation panel: conditional approval, **decided by people** (Cluster Ops Lead, Facility Manager, Program Owner sign-off — 50 min of human time), the disagreement and its resolution, burn-in 01:00–07:00 for lower carbon.
 
 ## 10:00–11:30 · Measure
 
@@ -60,8 +73,36 @@ End on the green **part 4** band (“This was one decision…”) and click **Ex
 
 Choose **Business unit** (5 sites × 80 decisions a day): “€1.46 per decision × 146,000 decisions a year ≈ €214k of AI spend avoided — for the same decisions.” Switch to **Enterprise** to show the order of magnitude, then **Model prices ×0.5** to show the saving survives cheaper models. Close on the three telemetry cards: unit cost per decision, drift caught the same day, value per euro of AI. Read the dark “How to say it” box if you need a closing sentence. Always call it a **projection** from one decision.
 
+## · Prerequisites (2 minutes)
+
+Flip *Without the foundations / With the three foundations*. Foundation 1: ≈760k tokens, 2 context overflows, €1.51 → 60 evidence records, €0.046. Foundation 2: figures generated vs computed and verified (−13.1 → +25.6 kW). Foundation 3: 9 raw tools and ≈1,989 tokens vs 1 goal, 4 competences, 3 people approving. “Agents are the visible part; the foundations are the prerequisite.” Items tagged *qualitative* are consequences, not measurements — say so.
+
 ## 11:30–12:00 · Technical view (optional)
 
 Open one MCP row (JSON-RPC request/response) and one A2A row. Show *10 / 10 consistency checks*.
 
 Rehearse once: run at 1×, then Reset. If asked “is this a real LLM?” — no: agents use scripted reasoners; tokens are estimated from the actual context; adapters are swappable for real MCP servers, A2A endpoints and model usage.
+
+## · The story (tab 01) — open and close with it
+
+- **Opening (1 minute):** the site opens on *The story · before the demo*: the situation, who takes part (3 people, a coordinator, 4 specialists, ordinary software) and the five questions we will test, each with a *watch for* hint. No answers yet — do not spoil the moment the cooling check fails.
+- **Closing (1–2 minutes):** after your live run, the recommendation panel has *The story: what happened*; the tab now shows the answers from your run — the eleven steps, the five questions ticked, the result and what the demo is and is not. The switch at the top lets you flip between the two moments at any time.
+
+## · Decision Intelligence
+
+Open `https://opedoussaut.github.io/LeanAI/` — nothing to install. Give the page a few seconds after it opens: the decision model (8.5 KB) and ONNX Runtime Web load in the background.
+
+- **Film (58 s):** Story tab → *System 1 · System 2* (the original 37-second film is the other choice).
+- **Read the orchestration panel top-down:** the dark **System 1 · triage** band runs on every request (decision model → confidence gate). Confident and bounded → the **fast path** on the left, System 2 greyed out. Complex or uncertain → straight down into **System 2**, where each agent carries *S1 selected · %*. The gate really chooses: the other branch is never executed.
+- **The clash (R-17):** when Cooling's check returns −13.1 kW, a red *Clash* panel opens above the canvas, a red arc joins Deployment (proceed) and Cooling (not as-is), and the Cooling agent and the BMS system pulse red. The six reaction steps light up as they happen — detected, Cooling objects, rebalance asked, proposal, people approve, re-check — and the panel turns green at +25.6 kW. Every step is read from the run, not scripted in the UI.
+- **Systems light up while they are called:** cyan while their data is extracted, blue with the tool name during an MCP call.
+- **The contrast (3 minutes):** Live demo → request switch. Run **R-22** first: *Decide · System 1* shows LOW / NO / DIRECT, the gate lets it through, one reversible reservation is made through MCP, the owner is notified — **no model calls**. Then **R-17**: HIGH / YES / ORCHESTRATE, all four agents; the gate escalates to System 2 and the familiar run follows.
+- **The line:** “A small model decides *whether* we need to think hard. Most requests don’t.”
+- **Proof it runs here:** Technical view → *SYSTEM 1 · what actually executed* — runtime (WebGPU or WASM), network call *None*, API cost *€0*, timings measured on this laptop.
+- **Economics:** *Two mechanisms* — reduce input (grooming) and reduce reasoning (the gate). Avoided reasoning on R-22 is an ESTIMATE against the R-17 run; say so.
+
+## · Engineering intelligence (tab 08, 3 minutes)
+
+- **The hand-off:** R-17 was approved with almost no margin; the projected cluster (1,469 kW) exceeds Loop A's validated 1,002 kW. Options A–C are computed and insufficient → it becomes an engineering question.
+- **Who does what:** LeanAI orchestrates; the Cameo MBSE agent drives CATIA Magic through cameo-mcp-bridge (MCP); the diagrams are native Cameo exports. Say the boundary: SysML v1, and the calculation runs outside Cameo (no Simulation Toolkit) — labelled on the page.
+- **The result:** v1 FAIL at S4 (−31.8 % margin), v2 PASS (+16.8 %); 7/8 vs 8/8 requirements verified. The page never approves: the engineer clicks.

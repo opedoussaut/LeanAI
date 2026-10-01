@@ -1,0 +1,286 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: Inter; font-weight: 200; src: url(inter-latin-200-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 300; src: url(inter-latin-300-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 400; src: url(inter-latin-400-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 600; src: url(inter-latin-600-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 700; src: url(inter-latin-700-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 800; src: url(inter-latin-800-normal.woff2); }
+html, body { margin: 0; background: #02060c; }
+canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1080"></canvas>
+<script type="module">
+// LeanAI — square social film (1080×1080, ~64 s). Deterministic: render(t) draws the frame at t seconds.
+// Figures: media/linkedin-facts.json (computed by the app's engine and engineering model). Diagrams: native CATIA Magic exports.
+const W = 1080, H = 1080, cv = document.getElementById('c'), g = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const eio = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const eout = k => 1 - Math.pow(1 - k, 3);
+const eback = k => { const c = 1.6; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
+const fade = (t, a, b, c, d) => Math.min(eio(seg(t, a, b)), 1 - eio(seg(t, c, d)));
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let x = Math.imul(seed ^ seed >>> 15, 1 | seed); x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x; return ((x ^ x >>> 14) >>> 0) / 4294967296; }; }
+const COL = { cyan: [61, 200, 255], blue: [70, 150, 235], violet: [160, 128, 255], amber: [244, 176, 70], green: [52, 220, 150], red: [255, 92, 92], white: [240, 247, 255], grey: [128, 156, 184], ink: [8, 18, 30] };
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const sprites = {};
+function sprite(name) {
+  if (sprites[name]) return sprites[name];
+  const s = document.createElement('canvas'); s.width = s.height = 64; const x = s.getContext('2d'), c = COL[name];
+  const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, rgba([255, 255, 255], 1)); gr.addColorStop(.12, rgba(c, .95)); gr.addColorStop(.4, rgba(c, .28)); gr.addColorStop(1, rgba(c, 0));
+  x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return (sprites[name] = s);
+}
+function glow(x, y, r, name, a) { if (a <= 0.003) return; g.globalAlpha = Math.min(1, a); g.drawImage(sprite(name), x - r, y - r, 2 * r, 2 * r); g.globalAlpha = 1; }
+function text(str, x, y, { size = 48, weight = 600, color = COL.white, a = 1, align = 'center', track = 0, blur = 0 } = {}) {
+  if (a <= 0.003) return;
+  g.font = `${weight} ${size}px Inter`; g.textAlign = align; g.textBaseline = 'middle'; g.letterSpacing = `${track}px`;
+  if (blur) { g.shadowColor = rgba(color, .55 * a); g.shadowBlur = blur; }
+  g.fillStyle = rgba(color, Math.min(1, a)); g.fillText(str, x, y); g.letterSpacing = '0px'; g.shadowBlur = 0;
+}
+function tw(str, size, weight, track = 0) { g.font = `${weight} ${size}px Inter`; g.letterSpacing = `${track}px`; const w = g.measureText(str).width; g.letterSpacing = '0px'; return w; }
+// A line of words that rise in one after another.
+function words(str, x, y, t0, t, { size = 60, weight = 700, color = COL.white, a = 1, stagger = .07, align = 'center', track = -1 } = {}) {
+  const ws = str.split(' '), sp = tw(' ', size, weight, track), widths = ws.map(w => tw(w, size, weight, track));
+  const total = widths.reduce((s, w) => s + w, 0) + sp * (ws.length - 1);
+  let cx = align === 'center' ? x - total / 2 : x;
+  ws.forEach((w, i) => { const k = eout(seg(t, t0 + i * stagger, t0 + i * stagger + .55)); text(w, cx, y + (1 - k) * 34, { size, weight, color, a: a * k, align: 'left', track }); cx += widths[i] + sp; });
+}
+function line(x1, y1, x2, y2, c, a, w = 1.5, dash = null) {
+  if (a <= 0.003) return; g.strokeStyle = rgba(c, a); g.lineWidth = w; g.setLineDash(dash ?? []); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); g.setLineDash([]);
+}
+function rrect(x, y, w, h, r, fill, stroke, lw = 1.5) {
+  g.beginPath(); g.roundRect(x, y, w, h, r);
+  if (fill) { g.fillStyle = fill; g.fill(); }
+  if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); }
+}
+const add = () => { g.globalCompositeOperation = 'lighter'; }, norm = () => { g.globalCompositeOperation = 'source-over'; };
+const fmt = v => Math.round(v).toLocaleString('en-US');
+const sgn = v => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`;
+
+// ---------- data ----------
+const F = await (await fetch('linkedin-facts.json')).json();
+const IX = await (await fetch('../evidence/cameo/index.json')).json();
+const IMG = {};
+await Promise.all(['internal_v1', 'internal_v2', 'traceability', 'verification_v2', 'context'].map(k => new Promise(res => { const im = new Image(); im.onload = res; im.src = `../evidence/cameo/${IX.diagrams[k].file}`; IMG[k] = im; })));
+const usable = F.p95Kw + F.targetKw + F.head1;                 // loop capacity the check used (p95 + target + headroom)
+const R = rng(11);
+const stars = Array.from({ length: 140 }, () => ({ x: R() * W, y: R() * H, z: .2 + R() * .8, p: R() * 6.28 }));
+const dots = Array.from({ length: 420 }, () => ({ x: R(), y: R(), s: R(), k: R() }));
+
+// ---------- timeline ----------
+const SC = { hook: 0, ask: 5, lean: 11, decide: 18, reason: 24, cost: 31, next: 36, mbse: 41.5, verdict: 50.5, human: 55.5, end: 59.5 };
+const DURATION = 65;
+
+function background(t) {
+  norm(); g.fillStyle = '#02060c'; g.fillRect(0, 0, W, H);
+  const hue = t < SC.next ? COL.cyan : t < SC.human ? COL.violet : COL.cyan;
+  const rg = g.createRadialGradient(W / 2, H * .5, 40, W / 2, H * .5, 760);
+  rg.addColorStop(0, `rgba(${hue[0] * .25 | 0},${hue[1] * .25 | 0},${hue[2] * .4 | 0},.55)`); rg.addColorStop(1, 'rgba(2,6,12,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, W, H);
+  add();
+  const on = eio(seg(t, .2, 2)) * .75, hz = 760, drift = (t * .3) % 1;
+  for (let i = -14; i <= 14; i++) { const bx = W / 2 + i * 90; line(W / 2, hz, bx + (bx - W / 2) * 2.2, H + 30, COL.cyan, .045 * on, 1); }
+  for (let k = 0; k < 12; k++) { const z = (k + 1 - drift) / 12; const y = hz + Math.pow(z, 2.6) * (H - hz + 40); line(0, y, W, y, COL.cyan, .07 * on * z, 1); }
+  for (const s of stars) { const a = (.25 + .35 * Math.sin(t * 1.2 * s.z + s.p)) * s.z * clamp(t / 1.2); const x = (s.x - t * 8 * s.z + W) % W; glow(x, s.y, 3 + 4 * s.z, 'cyan', a * .4); }
+  norm();
+}
+function vignette() { const v = g.createRadialGradient(W / 2, H / 2, 300, W / 2, H / 2, 820); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.75)'); g.fillStyle = v; g.fillRect(0, 0, W, H); }
+function kicker(t, a, b, label, color = COL.cyan) { const k = fade(t, a, a + .6, b - .5, b); text(label, W / 2, 96, { size: 17, weight: 700, color, a: k, track: 7 }); }
+function progress(t) {
+  const marks = [SC.ask, SC.lean, SC.decide, SC.reason, SC.next, SC.mbse, SC.verdict, SC.human];
+  const k = fade(t, 4.6, 5.4, SC.end - .4, SC.end);
+  const x0 = 240, x1 = W - 240, y = H - 52; line(x0, y, x1, y, COL.grey, .25 * k, 2);
+  const p = clamp((t - SC.ask) / (SC.end - SC.ask)); line(x0, y, lerp(x0, x1, p), y, COL.cyan, .9 * k, 2.5);
+  marks.forEach(m => { const x = lerp(x0, x1, (m - SC.ask) / (SC.end - SC.ask)); glow(x, y, 9, t >= m ? 'cyan' : 'blue', (t >= m ? .9 : .3) * k); });
+}
+
+// ---------- scenes ----------
+function sHook(t) {
+  const k1 = fade(t, .3, 1, 2.4, 2.9), k2 = fade(t, 2.8, 3.3, 4.6, 5.1);
+  words('Most AI demos end', W / 2, 470, .35, t, { size: 66, weight: 300, a: k1 });
+  words('with a chat answer.', W / 2, 560, .6, t, { size: 66, weight: 800, a: k1 });
+  words('This one ends', W / 2, 470, 2.85, t, { size: 66, weight: 300, a: k2 });
+  words('with an engineering', W / 2, 560, 3.05, t, { size: 66, weight: 800, color: COL.cyan, a: k2 });
+  words('decision.', W / 2, 645, 3.3, t, { size: 66, weight: 800, color: COL.cyan, a: k2 });
+  glow(W / 2, 560, 420, 'cyan', .12 * k2);
+}
+function sAsk(t) {
+  const T = t - SC.ask, k = fade(T, 0, .6, 5.4, 6);
+  kicker(t, SC.ask, SC.lean, 'THE QUESTION');
+  words(`A new ${F.rackKw} kW AI rack.`, W / 2, 230, .1, T, { size: 58, weight: 800, a: k });
+  words('One cooling loop. Can it take it?', W / 2, 305, .45, T, { size: 40, weight: 300, a: k });
+  // capacity bar
+  const x0 = 140, x1 = W - 140, y = 560, sc = v => x0 + (x1 - x0) * v / 1200;
+  const kb = eio(seg(T, .9, 2.2)), kr = eio(seg(T, 2.2, 3.4));
+  rrect(x0, y - 28, x1 - x0, 56, 28, rgba(COL.grey, .12 * k), rgba(COL.grey, .3 * k));
+  rrect(x0, y - 28, Math.max(56, (sc(F.p95Kw) - x0) * kb), 56, 28, rgba(COL.blue, .85 * k), null);
+  const xr = sc(F.p95Kw), wr = (sc(F.p95Kw + F.targetKw) - xr) * kr;
+  if (wr > 2) rrect(xr, y - 28, wr, 56, 8, rgba(COL.amber, .9 * k), null);
+  const xu = sc(usable); line(xu, y - 70, xu, y + 70, COL.red, .9 * k * kb, 3);
+  text(`loop limit ${fmt(usable)} kW`, xu, y - 92, { size: 22, weight: 700, color: COL.red, a: k * kb });
+  text(`measured today ${fmt(F.p95Kw)} kW`, x0, y + 70, { size: 22, weight: 600, color: COL.white, a: k * kb, align: 'left' });
+  text(`+ ${fmt(F.targetKw)} kW with margin`, xr + 10, y + 108, { size: 22, weight: 600, color: COL.amber, a: k * kr, align: 'left' });
+  const kd = eback(seg(T, 3.5, 4.2));
+  text(`${sgn(F.head1)} kW`, W / 2, 800, { size: 120 * clamp(kd, 0, 1.2), weight: 800, color: COL.red, a: k * clamp(kd), blur: 30 });
+  text('short — as it is', W / 2, 885, { size: 28, weight: 400, color: COL.grey, a: k * seg(T, 4, 4.5) });
+}
+function sLean(t) {
+  const T = t - SC.lean, k = fade(T, 0, .6, 6.4, 7);
+  kicker(t, SC.lean, SC.decide, 'LEAN · BEFORE ANY AI', COL.green);
+  const kc = eio(seg(T, 1, 4));
+  const n = Math.round(lerp(F.rawRecords, F.evidenceRecords, kc));
+  const done = n === F.evidenceRecords;
+  text(fmt(n), W / 2, 330, { size: 170, weight: 800, color: done ? COL.green : COL.white, a: k, blur: done ? 40 : 0, track: -6 });
+  text(done ? 'pieces of evidence' : 'raw sensor records', W / 2, 440, { size: 30, weight: 400, color: COL.grey, a: k });
+  // particles funnel into a point
+  add();
+  for (const d of dots) {
+    const sx = 140 + d.x * (W - 280), sy = 520 + d.y * 230, tx = W / 2 + (d.k - .5) * 60, ty = 790;
+    const p = eio(clamp((kc - d.s * .4) / .6)); const x = lerp(sx, tx, p), y = lerp(sy, ty, p);
+    const keep = d.s > .995 - .03; glow(x, y, keep ? 9 : 4, keep ? 'green' : 'cyan', k * (p > .97 && !keep ? .05 : .5));
+  }
+  norm();
+  words(`${F.reductionPct.toFixed(1)} % less context. Ordinary code, no AI.`, W / 2, 905, 4.2, T, { size: 34, weight: 600, a: k });
+}
+function sDecide(t) {
+  const T = t - SC.decide, k = fade(T, 0, .6, 5.4, 6);
+  kicker(t, SC.decide, SC.reason, 'DECIDE · SYSTEM 1', COL.violet);
+  words('A tiny model decides', W / 2, 260, .1, T, { size: 58, weight: 800, a: k });
+  words('whether we need to think hard.', W / 2, 335, .4, T, { size: 42, weight: 300, a: k });
+  const chips = [['RISK', F.s1.risk], ['REASONING', F.s1.reasoning], ['ROUTE', F.s1.route], ['AGENTS', String(F.s1.agents)]];
+  chips.forEach(([l, v], i) => {
+    const kk = eback(seg(T, 1.3 + i * .35, 1.9 + i * .35)), x = 150 + (i % 2) * 400, y = 470 + Math.floor(i / 2) * 150;
+    g.save(); g.translate(x + 180, y + 55); g.scale(clamp(kk, 0, 1.2), clamp(kk, 0, 1.2)); g.translate(-(x + 180), -(y + 55));
+    rrect(x, y, 360, 110, 22, rgba(COL.violet, .14 * k), rgba(COL.violet, .7 * k), 2);
+    text(l, x + 28, y + 34, { size: 16, weight: 700, color: COL.violet, a: k, align: 'left', track: 4 });
+    text(v, x + 28, y + 76, { size: 38, weight: 800, a: k, align: 'left' }); g.restore();
+  });
+  words('In the browser · under a millisecond · €0', W / 2, 840, 3.2, T, { size: 30, weight: 600, color: COL.cyan, a: k });
+}
+function sReason(t) {
+  const T = t - SC.reason, k = fade(T, 0, .6, 6.4, 7);
+  kicker(t, SC.reason, SC.cost, 'REASON · AGENTS + PHYSICS');
+  // four agents around the orchestrator
+  const cx = W / 2, cy = 380, names = ['Deployment', 'Cooling', 'Workload', 'Sustainability'];
+  add(); glow(cx, cy, 70, 'cyan', k * .9);
+  names.forEach((nm, i) => { const a = -Math.PI / 2 + i * Math.PI / 2 + .6, r = 210, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * .7;
+    const on = seg(T, .4 + i * .2, .9 + i * .2); line(cx, cy, lerp(cx, x, on), lerp(cy, y, on), COL.violet, .5 * k, 2, [6, 6]); glow(x, y, 34, 'violet', k * on * .9); });
+  norm();
+  names.forEach((nm, i) => { const a = -Math.PI / 2 + i * Math.PI / 2 + .6, x = cx + Math.cos(a) * 210, y = cy + Math.sin(a) * 147;
+    text(nm, x, y + (y > cy ? 52 : -50), { size: 22, weight: 600, a: k * seg(T, .6 + i * .2, 1 + i * .2) }); });
+  text('Orchestrator', cx, cy + 62, { size: 20, weight: 700, color: COL.cyan, a: k });
+  // headroom morph
+  const ko = eio(seg(T, 2.5, 2.8)), kn = eback(seg(T, 2.85, 3.35)), km = seg(T, 2.8, 2.81), ka = k * seg(T, 1.6, 2.1);
+  text(`${sgn(F.head1)} kW`, W / 2, 735 - 40 * ko, { size: 118, weight: 800, color: COL.red, a: ka * (1 - ko), blur: 34, track: -3 });
+  text(`${sgn(F.head2)} kW`, W / 2, 735, { size: 118 * clamp(kn, 0, 1.15), weight: 800, color: COL.green, a: ka * clamp(kn), blur: 34, track: -3 });
+  text(km < .5 ? 'not as it is' : 'move one low-priority job → verified again', W / 2, 830, { size: 30, weight: 400, color: COL.grey, a: k * seg(T, 1.8, 2.3) });
+  words(`Computed by physics, never by the model. ${F.approvals} people approve.`, W / 2, 900, 4.3, T, { size: 28, weight: 600, a: k, stagger: .04 });
+}
+function sCost(t) {
+  const T = t - SC.cost, k = fade(T, 0, .5, 4.5, 5);
+  kicker(t, SC.cost, SC.next, 'MEASURED · EVERY TOKEN, EVERY EURO', COL.green);
+  const ka = eio(seg(T, .3, 1.2)), kb = eio(seg(T, 1.2, 2.2));
+  text('brute force', 300, 380, { size: 28, weight: 400, color: COL.grey, a: k * ka });
+  text(`€${F.bruteCost.toFixed(2)}`, 300, 470, { size: 100, weight: 300, color: COL.grey, a: k * ka, track: -3 });
+  line(190, 470, 410, 470, COL.red, .8 * k * seg(T, 1, 1.4), 4);
+  text('lean', 780, 380, { size: 28, weight: 400, color: COL.green, a: k * kb });
+  text(`€${F.leanCost.toFixed(3)}`, 780, 470, { size: 100, weight: 800, color: COL.green, a: k * kb, blur: 30, track: -3 });
+  text('per decision', W / 2, 560, { size: 28, weight: 400, color: COL.grey, a: k * kb });
+  words(`${Math.round(F.bruteCost / F.leanCost)}× cheaper. Same decision.`, W / 2, 720, 2.5, T, { size: 54, weight: 800, a: k });
+}
+function sNext(t) {
+  const T = t - SC.next, k = fade(T, 0, .6, 5, 5.5);
+  kicker(t, SC.next, SC.mbse, 'NEXT YEAR', COL.amber);
+  words('Then the next AI cluster arrives.', W / 2, 190, .1, T, { size: 48, weight: 800, a: k });
+  const base = 790, s = 0.26, bars = [[F.p95Kw, 'today', COL.blue], [F.futureKw, 'projected', COL.red]];
+  bars.forEach(([v, l, c], i) => { const kk = eio(seg(T, .6 + i * .5, 1.6 + i * .5)), x = 330 + i * 300, h = v * s * kk;
+    rrect(x - 85, base - h, 170, h, 14, rgba(c, .85 * k), null); text(`${fmt(v)} kW`, x, base - h + 34, { size: 28, weight: 800, a: k * kk }); text(l, x, base + 34, { size: 24, weight: 400, color: COL.grey, a: k }); });
+  const yl = base - F.cap1 * s, kl = seg(T, 1.8, 2.4); line(170, yl, W - 170, yl, COL.amber, .9 * k * kl, 3, [12, 8]);
+  text(`validated capacity ${fmt(F.cap1)} kW`, 170, yl - 24, { size: 22, weight: 700, color: COL.amber, a: k * kl, align: 'left' });
+  words(`${F.options} operating options tested. None is enough.`, W / 2, 880, 2.7, T, { size: 32, weight: 600, a: k });
+  words('It is now an engineering question.', W / 2, 940, 3.5, T, { size: 32, weight: 800, color: COL.amber, a: k });
+}
+function cameo(key, x, y, w, h, a) {
+  if (a <= .003) return; const im = IMG[key];
+  g.globalAlpha = a; rrect(x, y, w, h, 16, '#f7f9fb', 'rgba(170,200,240,.6)', 2);
+  rrect(x, y, w, 40, 16, '#e6edf5', null); g.fillStyle = '#e6edf5'; g.fillRect(x, y + 20, w, 20);
+  ['#ff6058', '#ffbd2e', '#28c940'].forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(x + 22 + i * 20, y + 20, 6, 0, 6.283); g.fill(); }); g.globalAlpha = 1;
+  text(`CATIA Magic · ${IX.diagrams[key].name}`, x + 88, y + 21, { size: 16, weight: 600, color: [40, 60, 80], a, align: 'left' });
+  const iw = w - 24, ih = h - 60, f = Math.min(iw / im.width, ih / im.height);
+  g.globalAlpha = a; g.imageSmoothingQuality = 'high'; g.drawImage(im, x + 12 + (iw - im.width * f) / 2, y + 48 + (ih - im.height * f) / 2, im.width * f, im.height * f); g.globalAlpha = 1;
+}
+function sMbse(t) {
+  const T = t - SC.mbse, k = fade(T, 0, .6, 8.4, 9);
+  kicker(t, SC.mbse, SC.verdict, 'MODEL · REAL MBSE, THROUGH MCP', COL.violet);
+  // chain
+  const nodes = ['LeanAI agent', 'MCP', 'CATIA Magic'], kc = seg(T, .2, 1.4);
+  nodes.forEach((n, i) => { const x = 220 + i * 320, kk = eout(seg(T, .2 + i * .3, .8 + i * .3));
+    rrect(x - 130, 150, 260, 64, 32, rgba(i === 1 ? COL.violet : COL.cyan, .14 * k * kk), rgba(i === 1 ? COL.violet : COL.cyan, .8 * k * kk), 2);
+    text(n, x, 182, { size: 24, weight: 700, a: k * kk });
+    if (i < 2) { add(); const p = (T * .7 + i * .3) % 1; glow(lerp(x + 130, x + 190, p), 182, 10, 'violet', k * kc); norm(); line(x + 130, 182, x + 190, 182, COL.violet, .6 * k * kc, 2); } });
+  // three diagrams flipping
+  const keys = [['internal_v1', 'Current loop (v1)'], ['internal_v2', 'Proposed loop (v2) — amber changed, green added'], ['traceability', 'Every result traced to a requirement']];
+  keys.forEach(([key, lab], i) => {
+    const a0 = 1.4 + i * 2.35, kk = fade(T, a0, a0 + .5, a0 + 2.15, a0 + 2.55) * k; if (kk <= 0) return;
+    const z = lerp(.94, 1, eout(seg(T, a0, a0 + 2.5)));
+    g.save(); g.translate(W / 2, 560); g.scale(z, z); g.translate(-W / 2, -560); cameo(key, 36, 250, W - 72, 620, kk); g.restore();
+    text(lab, W / 2, 900, { size: 30, weight: 600, a: kk });
+  });
+  words('Native diagrams from the system model — not drawn by AI.', W / 2, 955, 1.8, T, { size: 26, weight: 400, color: COL.grey, a: k, stagger: .03 });
+}
+function sVerdict(t) {
+  const T = t - SC.verdict, k = fade(T, 0, .6, 4.4, 5);
+  kicker(t, SC.verdict, SC.human, 'SIMULATE · VERIFY · SAME FOUR SCENARIOS');
+  const cards = [['LOOP A v1', 'current', 'FAIL', F.margin1, `${F.req.v1}/${F.req.total}`, COL.red], ['LOOP A v2', 'proposed', 'PASS', F.margin2, `${F.req.v2}/${F.req.total}`, COL.green]];
+  cards.forEach(([n, s, v, m, r, c], i) => { const kk = eback(seg(T, .4 + i * .7, 1.1 + i * .7)), x = 90 + i * 470, y = 230;
+    g.save(); g.translate(x + 210, y + 280); g.scale(clamp(kk, 0, 1.15), clamp(kk, 0, 1.15)); g.translate(-(x + 210), -(y + 280));
+    rrect(x, y, 430, 560, 28, rgba(c, .1 * k), rgba(c, .75 * k), 2.5);
+    text(n, x + 215, y + 60, { size: 26, weight: 800, a: k, track: 3 }); text(s, x + 215, y + 98, { size: 22, weight: 400, color: COL.grey, a: k });
+    text(v, x + 215, y + 210, { size: 96, weight: 800, color: c, a: k, blur: 34 });
+    text(`${m > 0 ? '+' : '−'}${Math.abs(m).toFixed(1)} %`, x + 215, y + 330, { size: 54, weight: 300, a: k }); text('margin at future load', x + 215, y + 380, { size: 20, weight: 400, color: COL.grey, a: k });
+    text(r, x + 215, y + 460, { size: 54, weight: 800, a: k }); text('requirements verified', x + 215, y + 505, { size: 20, weight: 400, color: COL.grey, a: k }); g.restore(); });
+  words(`Capacity ${fmt(F.cap1)} → ${fmt(F.cap2)} kW`, W / 2, 900, 2.2, T, { size: 34, weight: 700, color: COL.cyan, a: k });
+}
+function sHuman(t) {
+  const T = t - SC.human, k = fade(T, 0, .5, 3.6, 4);
+  const L = [['AI proposes and orchestrates.', COL.white], ['MBSE provides the evidence.', COL.violet], ['Humans decide.', COL.amber]];
+  L.forEach(([s, c], i) => words(s, W / 2, 400 + i * 110, .2 + i * .8, T, { size: i === 2 ? 76 : 52, weight: i === 2 ? 800 : 300, color: c, a: k }));
+  glow(W / 2, 620, 300, 'amber', .14 * k * seg(T, 1.8, 2.6));
+}
+function sEnd(t) {
+  const T = t - SC.end, k = eout(seg(T, 0, 1));
+  add(); const rr = eout(seg(T, 0, 1.6)) * 900; g.strokeStyle = rgba(COL.cyan, .4 * (1 - seg(T, 0, 1.6))); g.lineWidth = 2.5; g.beginPath(); g.arc(W / 2, 430, rr, 0, 6.283); g.stroke(); glow(W / 2, 430, 260, 'cyan', .2 * k); norm();
+  const wa = tw('Lean', 150, 800, -5), wb = tw('AI', 150, 200, -5), sx = W / 2 - (wa + wb) / 2;
+  text('Lean', sx, 430 + (1 - k) * 24, { size: 150, weight: 800, a: k, align: 'left', track: -5 });
+  text('AI', sx + wa, 430 + (1 - k) * 24, { size: 150, weight: 200, color: [120, 205, 255], a: k, align: 'left', track: -5 });
+  const k2 = seg(T, .8, 1.6), k3 = seg(T, 1.6, 2.4);
+  text('Less noise. Less cost. More value.', W / 2, 560, { size: 38, weight: 300, a: k2 });
+  text('LEAN · DECIDE · REASON · MODEL · VERIFY · HUMAN DECISION', W / 2, 650, { size: 17, weight: 700, color: COL.cyan, a: k3, track: 5 });
+  rrect(W / 2 - 300, 740, 600, 72, 36, rgba(COL.cyan, .12 * k3), rgba(COL.cyan, .7 * k3), 2);
+  text('opedoussaut.github.io/LeanAI', W / 2, 777, { size: 30, weight: 700, a: k3 });
+  text('Open demo · simulated AI-factory case · illustrative figures', W / 2, 990, { size: 18, weight: 400, color: COL.grey, a: k3 });
+}
+function render(t) {
+  background(t);
+  if (t < SC.ask + .2) sHook(t);
+  if (t >= SC.ask - .1 && t < SC.lean + .2) sAsk(t);
+  if (t >= SC.lean - .1 && t < SC.decide + .2) sLean(t);
+  if (t >= SC.decide - .1 && t < SC.reason + .2) sDecide(t);
+  if (t >= SC.reason - .1 && t < SC.cost + .2) sReason(t);
+  if (t >= SC.cost - .1 && t < SC.next + .2) sCost(t);
+  if (t >= SC.next - .1 && t < SC.mbse + .2) sNext(t);
+  if (t >= SC.mbse - .1 && t < SC.verdict + .2) sMbse(t);
+  if (t >= SC.verdict - .1 && t < SC.human + .2) sVerdict(t);
+  if (t >= SC.human - .1 && t < SC.end + .2) sHuman(t);
+  if (t >= SC.end) sEnd(t);
+  progress(t); vignette();
+  const fo = seg(t, DURATION - 1.2, DURATION); if (fo > 0) { g.fillStyle = `rgba(2,6,12,${fo})`; g.fillRect(0, 0, W, H); }
+  const fi = 1 - seg(t, 0, .5); if (fi > 0) { g.fillStyle = `rgba(2,6,12,${fi})`; g.fillRect(0, 0, W, H); }
+}
+await document.fonts.load('800 40px Inter'); await document.fonts.load('300 40px Inter'); await document.fonts.load('200 40px Inter'); await document.fonts.load('600 40px Inter'); await document.fonts.load('700 40px Inter'); await document.fonts.load('400 40px Inter');
+window.render = render; window.DURATION = DURATION; window.SC = SC; window.ready = true;
+render(0);
+</script></body></html>

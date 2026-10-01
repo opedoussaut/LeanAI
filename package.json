@@ -3,7 +3,7 @@
   "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "LeanAI — Less noise. Less cost. More value. An interactive demonstrator of MCP, A2A, lean data preparation and AI economics.",
+  "description": "LeanAI \u2014 Less noise. Less cost. More value. Decision intelligence, MCP, A2A, lean data preparation, AI economics and MBSE-backed engineering decisions.",
   "engines": {
     "node": ">=22"
   },

@@ -1,26 +1,27 @@
-# LeanAI
-
-**Less noise. Less cost. More value.**
+# LeanAI · Less noise. Less cost. More value.
 
 Live demo: **https://opedoussaut.github.io/LeanAI/**
 
-An interactive demonstrator of what happens behind an AI decision — and what it really costs.
+An interactive, engineer-inspectable demonstrator of how industrial AI should work — on one simulated AI-factory case:
 
-Executive-friendly, engineer-inspectable. Four ideas:
+**OBSERVE → GROOM → DECIDE → REASON → ACT → MEASURE**, and, when an operating decision is no longer enough,
+**→ MODEL → SIMULATE → VERIFY → a human engineering decision.**
 
-**OPEN → LEAN → ORCHESTRATE → MEASURE**
-
-1. **MCP** — agents discover and use tools and data through one standard interface.
-2. **A2A** — specialised agents collaborate through bounded, structured messages.
+1. **Open at the agent layer** — people and other agents work with governed domain agents through **A2A** (goal in, verified answer out). **MCP** stays inside each agent, as the way it reaches its own systems — not the open interface (opening raw tools pushes callers into brute-force attempts).
+2. **Hybrid teams in an engineered loop** — several people (Program Owner, Cluster Ops Lead, Facility Manager) coordinate, approve and sign off alongside specialised agents; the long-running job is an explicit loop with a goal, a deterministic acceptance test, a correction step, a budget and a stop rule.
 3. **Lean AI** — deterministic grooming of plant data *before* any AI reasoning.
-4. **AI economics** — the recorded execution cost of a run, compared with the estimated value it enabled, and a three-step explanation of the brute-force vs lean saving.
-5. **At scale** — a projection of per-decision savings across sites and volumes, and why telemetry matters.
+4. **Decision intelligence** — a small decision model (System 1) in the browser triages every request; agents (System 2) are engaged only when the confidence gate says reasoning is needed.
+5. **Engineering intelligence** — when the projected load exceeds what the plant was designed for, the question is handed to a real MBSE model (CATIA Magic, through the open-source cameo-mcp-bridge): current and proposed architectures, identical scenarios, derived verification, and a decision left to a person.
+6. **AI economics and scale** — the recorded execution cost of a run, the estimated value it enabled, the brute-force vs lean saving, and a projection across sites.
+7. **Framing** — five attributes of industrial-grade AI (Transformative, Scientific, Actionable, Open, Trusted), agents with competences and skills, three foundations (knowledge, physics, reasoning), and a **Prerequisites** tab showing each foundation with and without, on the demo's own numbers.
 
 | Learn | Live demo |
 | --- | --- |
 | ![Learn](docs/learn.jpg) | ![Live demo](docs/live-demo.jpg) |
 | **AI economics** | **Technical view** |
 | ![AI economics](docs/economics.jpg) | ![Technical view](docs/technical.jpg) |
+| **Engineering (MBSE)** | **The story** |
+| ![Engineering](docs/engineering.jpg) | ![The story](docs/story.jpg) |
 
 ## Run it
 
@@ -42,7 +43,7 @@ Four specialists and an orchestrator decide: Rack Deployment (DCIM, power), Liqu
 
 Outcome of the reference run: Loop A p95 heat is 869 kW, computed from CDU flow × ΔT during grooming → **13 kW short** as-is. Cooling asks Workload to release load; Workload proposes moving low-priority, checkpointable `ft-sweep-17` from A-07 to idle B-05 (38.7 kW). Cooling re-runs the same deterministic check → **+25.6 kW**. Decision: deploy on Thursday, conditional on the migration; burn-in 01:00–07:00 at the lowest grid carbon intensity.
 
-A 12-minute presenter script is in [PRESENTER.md](PRESENTER.md).
+A presenter script is in [PRESENTER.md](PRESENTER.md).
 
 ## What is real, what is simulated
 
@@ -80,10 +81,39 @@ styles/app.css                Design system
 
 To connect real systems: pass an `mcpTransport` that POSTs the same JSON-RPC requests to an MCP server, an `a2aTransport` that resolves Agent Cards and POSTs `message/send`, and a `model` adapter returning provider usage — the engine, telemetry and UI are unchanged.
 
+## Decision Intelligence
+
+**OBSERVE → GROOM → DECIDE → REASON → ACT → MEASURE.** A small decision model (System 1) now sits between grooming and the agents. It answers four bounded questions in under a millisecond, in the browser, and a confidence gate decides whether agents (System 2) are needed at all.
+
+- **Runs entirely from GitHub Pages.** No server, no Ollama, no API key, no install.
+- **The model** — `models/system1/decision-mlp.onnx` (8.5 KB, 1,772 parameters; MLP 9 → 32 → 32 → 12, four heads). Trained by `models/system1/train.py` (numpy, seed 7, reproducible byte for byte) on 9,000 synthetic samples labelled by planning rules; holdout accuracy in `model-card.json`. Inputs are nine deterministic features of the groomed evidence (`src/system1/features.js`).
+- **Typed outputs** — `capacity_risk` LOW/MEDIUM/HIGH · `reasoning_required` YES/NO · `preferred_route` DIRECT/ORCHESTRATE/HUMAN_REVIEW · `agents_required` ⊆ {WORKLOAD, COOLING, SUSTAINABILITY, DEPLOYMENT}, each with probabilities.
+- **Runtime** — ONNX Runtime Web 1.22.0, vendored in `vendor/` (MIT). WebGPU when the browser has an adapter, otherwise WASM (CPU, single-threaded because Pages is not cross-origin isolated), otherwise a pure-JavaScript evaluator of the same weights — clearly labelled as a fallback. The Technical view shows what actually executed: runtime, load/cold/warm timings, parity with the JS evaluator, network call *None*, API cost *€0*.
+- **Gate (triage, causal)** — act directly only if route = DIRECT, reasoning = NO and every confidence ≥ 75 %; otherwise System 2, or a person when the route is HUMAN_REVIEW. The run script carries every branch; the engine executes only the branch the gate chose at run time (tests force each path). System 2 has a reasoning script only for R-17; an escalated R-22 goes to a person.
+- **Orchestration view** — people on top; a **System 1 · triage** band (decision model → confidence gate → fast path) on every request; **System 2** below it, engaged only when the gate escalates, with each agent tagged by System 1's `agents_required` probability. On the fast path System 2 is shown as not engaged and only the Deployment skill runs (MCP → DCIM).
+- **Two requests** — **R-17** (complex, 120 kW NVL72 on Loop A): HIGH / YES / ORCHESTRATE / all four agents → System 2 runs as before. **R-22** (simple, 34 kW DGX on Loop B): LOW / NO / DIRECT → one bounded, reversible MCP action (`reserveRackSlot`), owner notified, **0 model calls**. Avoided reasoning is shown as an ESTIMATE against the R-17 run.
+- **Cinematic** — `media/LeanAI-cinematic-intro-system1-system2.mp4` (58 s: the R-17 question, grooming, System 1 triage, the gate, System 2, the Loop A overload decision, accountability, measurement; source `media/scene-system1-system2.html`, renderer `media/render-system1-system2.py`). The original 37-second film and the Engineering Intelligence film are selectable in the Story tab.
+
+Retrain: `cd models/system1 && python3 train.py` (numpy, onnx). Tests: `npm test` (includes ONNX hash, JS-vs-ONNX golden parity, holdout accuracy, R-17 escalation, R-22 bounded path).
+
+## Engineering intelligence — Cooling Loop A MBSE
+
+What happens after Decision Intelligence: LeanAI detects that the projected AI load exceeds Loop A's validated envelope,
+tests the operational options with the model, escalates an engineering question, and asks the authoritative MBSE model in
+**CATIA Magic** through **[cameo-mcp-bridge](https://github.com/ajhcs/cameo-mcp-bridge)** (MCP). Loop A v1 and a proposed
+Loop A v2 are evaluated under identical conditions; the evidence comes back to a human engineering decision.
+
+* Page: **08 Engineering** (`#engineering`). Mode badge: *Recorded Cameo evidence* (default) or *Live Cameo* (`?cameo=live`).
+* Engineering source of truth: `src/engineering/` (deterministic; no randomness). Report: [`docs/COOLING-LOOP-MBSE.md`](docs/COOLING-LOOP-MBSE.md).
+* Cameo agent, live server and how to rebuild the model: [`tools/cameo/README.md`](tools/cameo/README.md).
+* Recorded evidence: `evidence/cameo/` — native Cameo diagram exports, capability probe, build and workflow logs (public copy; see `evidence/cameo/README.md`).
+* Film: `media/LeanAI-cinematic-cooling-loop-mbse.mp4` (104 s) — why each diagram exists, who creates it and what it shows. Page captures: `docs/captures/cooling-loop-mbse/`.
+* Honest boundaries: SysML v1 (no SysML v2 plugin installed); the calculation runs in LeanAI (no Cameo Simulation Toolkit) and is labelled as such.
+
 ## Protocol Lab (previous workshop, preserved)
 
 `lab.html` keeps the original two-tab cooling-capacity workshop (Rack Deployment Planner ↔ Liquid Cooling Engineer) with live JSON-RPC over HTTP when served by `npm start`. It is linked from the page footer. Presenter script: [PROTOCOL-LAB-PRESENTER.md](PROTOCOL-LAB-PRESENTER.md).
 
-This is a personal demonstrator with a simulated scenario, illustrative data and illustrative prices. It is not a claim about deployed customer systems and not an official product of any company.
+This is a personal demonstrator on a simulated case with illustrative figures — not a claim about deployed customer systems and not a vendor product. CATIA Magic and Cameo are trademarks of their owner; cameo-mcp-bridge is an independent open-source project.
 
 Protocol references: [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25) · [A2A specification](https://a2a-protocol.org/v0.3.0/specification/).

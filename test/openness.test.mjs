@@ -35,7 +35,7 @@ test('run completes through all states with the expected recommendation', async 
   assert.equal(run.status, 'completed');
   assert.equal(run.state, 'COMPLETED');
   const order = [...new Set(run.events.map(e => e.state))];
-  assert.deepEqual(order, ['INGESTING', 'GROOMING', 'ORCHESTRATING', 'ANALYZING', 'DECIDING', 'COMPLETED']);
+  assert.deepEqual(order, ['INGESTING', 'GROOMING', 'SYSTEM1', 'ORCHESTRATING', 'ANALYZING', 'DECIDING', 'COMPLETED']);
   const firstAgentWork = run.events.findIndex(e => e.kind === 'model');
   assert.ok(run.events.findLastIndex(e => e.kind === 'groom') < firstAgentWork, 'grooming precedes reasoning');
   const o = run.recommendation.outcome;
@@ -91,6 +91,43 @@ test('grooming explanations are derived from the run and agree with the pipeline
   const w = ex.aggregate.window;
   assert.ok(Math.abs(w.perCdu.reduce((a, p) => a + p.meanKw, 0) - w.heatKw) <= 0.11, 'window heat = sum of CDU means');
   assert.equal(ex.rank.table.reduce((a, t) => a + t.kept, 0), ex.counts.rank);
+});
+
+test('Framing: people work with agents at the open layer and take the decision', async () => {
+  const { run, metrics } = await runOnce();
+  assert.equal(metrics.totals.humansInvolved, sc.humans.length);
+  assert.ok(run.humanActions.some(h => h.type === 'coordinate' && sc.humans.some(x => x.id === h.to)), 'people coordinate with people');
+  const approvals = run.humanActions.filter(h => h.type === 'approve' || h.type === 'sign-off');
+  assert.ok(approvals.length >= 2, 'people approve');
+  const decision = run.events.findIndex(e => e.kind === 'decision'), lastHuman = run.events.findLastIndex(e => e.kind === 'human');
+  assert.ok(lastHuman < decision && run.events[lastHuman].title, 'sign-off precedes the decision');
+  // People never call tools: MCP stays inside the agents.
+  assert.ok(run.mcpCalls.every(c => sc.agents.some(a => a.id === c.agent)));
+});
+
+test('Framing: the loop stops when the deterministic acceptance test passes', async () => {
+  const { run } = await runOnce();
+  const checks = run.mcpCalls.filter(c => c.tool === sc.loop.verifyTool).map(c => c.data);
+  assert.ok(checks.length <= sc.loop.maxIterations);
+  assert.equal(checks.at(-1).criterionMet, true);
+  assert.ok(checks.slice(0, -1).every(c => !c.criterionMet), 'no iteration after acceptance');
+  assert.deepEqual(checks.map(c => c.headroomKw), [-13.1, 25.6]);
+});
+
+test('Framing: every agent is a competence of an agent family, and prerequisite figures come from the run', async () => {
+  const { COMPANIONS } = await import('../src/domain/positioning.js');
+  const { runFacts } = await import('../src/ui/framing.js');
+  for (const a of sc.agents) {
+    assert.ok(COMPANIONS[a.companion], `${a.id} has a known companion`);
+    assert.ok(COMPANIONS[a.companion].competences.includes(a.competence.split(' · ')[0]), `${a.id}: ${a.competence} is a listed ${a.companion} competence`);
+  }
+  const { run, metrics, naive } = await runOnce();
+  const f = runFacts(sc, run);
+  assert.equal(f.leanCost, metrics.totals.totalCost);
+  assert.equal(f.bfCost, naive.totals.totalCost);
+  assert.equal(f.skillCalls, run.mcpCalls.length);
+  assert.deepEqual([f.head1, f.head2], [-13.1, 25.6]);
+  assert.ok(f.toolTokens > f.answerTokens, 'agent-level openness reads less than tool-level');
 });
 
 test('value explainer reproduces the estimated value and its break-even', async () => {

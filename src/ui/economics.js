@@ -1,7 +1,7 @@
 // AI ECONOMICS — was using AI economically justified?
 import { icon } from './icons.js';
 import { esc, int, compact, eur, ms, times, pct } from './format.js';
-import { receipt, pages, TOKENS_PER_PAGE } from '../engine/telemetry.js';
+import { receipt, pages, TOKENS_PER_PAGE, computeMetrics, computeAvoided } from '../engine/telemetry.js';
 import { PRESETS, perDecisionOf, decisionsPerYear, bigEur, bigNum } from './scale.js';
 import { valueDetailMarkup, bindValueDetail } from './value.js';
 
@@ -12,7 +12,7 @@ export function mountEconomics(el, app) {
   let key = '';
   function update() {
     const view = app.completed();
-    const k = `${view.run.id}:${view.source}:${view.liveStatus ?? ''}`;
+    const k = `${view.run.id}:${view.source}:${view.liveStatus ?? ''}:${app.system1Info?.()?.backend ?? 'pending'}`;
     if (k === key) return;
     key = k;
     const { run, metrics: m, naive, value, source, liveStatus } = view;
@@ -23,10 +23,12 @@ export function mountEconomics(el, app) {
       : `<span class="tag neutral">Reference run</span> Computed instantly with the same engine${running ? ' · your live run is in progress and will replace it when the decision is reached' : ' · start the live demo to replay it'}`;
     el.innerHTML = `
     <div class="page-head">
-      <div><span class="eyebrow"><i class="pip"></i>AI economics</span><h1 class="display" style="font-size:clamp(32px,3.6vw,50px);margin-top:12px">Was using AI <span>economically justified?</span></h1>
-      <p class="lede">Token cost alone says little. Here the recorded execution cost of one run is set against the industrial outcome it enabled — with recorded run telemetry and estimated value kept strictly apart.</p></div>
+      <div><span class="eyebrow"><i class="pip"></i>AI economics</span><h1 class="display" style="font-size:clamp(32px,3.6vw,50px);margin-top:12px">AI you can afford to run <span>on every decision.</span></h1>
+      <p class="lede">The point is not a cheaper task: it is a decision that can now be taken on evidence every time, not only when it justifies an expert’s day. Here the recorded execution cost of one run is set against the industrial outcome it enabled — with recorded run telemetry and estimated value kept strictly apart.</p></div>
       <div class="run-banner">${banner}</div>
     </div>
+
+    ${twoMechanisms(app)}
 
     <nav class="journey" aria-label="How to read this page">
       <a href="#part-cost"><i>1</i><span><b>What did it cost?</b><small>measured by telemetry</small></span></a>
@@ -210,6 +212,64 @@ function savingsSection(view, sc) {
         <span class="fx">${times(r.factor)}</span></div>`).join('')}
       <div class="cmp-row"><b>Business decision</b><div class="small muted">Assumed identical for this comparison. In practice, burying the relevant evidence among ${int(m.context.rawRecords)} raw records also raises the risk of a worse decision; that effect is not quantified here.</div><span class="fx" style="color:var(--muted)">=</span></div>
       <p class="cmp-note">${n.totals.windowOverflows.map(o => `The brute-force ${esc(label(sc, o.agent))} context (${compact(o.tokens)} tokens) exceeds the model's ${compact(sc.models[n.calls.find(c => c.agent === o.agent).model].contextWindow)}-token window, so it must be split into ${o.chunks} calls.`).join(' ')} Bars are linear. Energy uses indicative per-token factors (${sc.energy.whPer1kInputTokens} Wh / 1k tokens read, ${sc.energy.whPer1kOutputTokens} Wh / 1k written) — order of magnitude only.</p>
+    </div>
+  </section>`;
+}
+
+
+// ---------- Two efficiency mechanisms: reduce input (GROOM) and reduce reasoning (DECIDE) ----------
+function twoMechanisms(app) {
+  const sc = app.scenario;
+  const c = computeMetrics(app.reference.run, sc), s = computeMetrics(app.referenceSimple.run, sc), av = computeAvoided(s, c);
+  const rt = app.system1Info?.();
+  const r17 = app.reference.run, r22 = app.referenceSimple.run;
+  const raw = r17.raw.records, ev = r17.grooming.evidence.records;
+  // System 1 latency: the browser runtime's warm median (same model, same cost per request). Browsers round
+  // performance.now() to ~0.1 ms outside cross-origin isolation, so single sub-millisecond readings are not shown.
+  const s1lat = rt?.warmMs != null ? `${rt.warmMs < 0.1 ? '< 0.1' : rt.warmMs.toFixed(2)} ms` : '< 1 ms';
+  const s1src = rt?.warmMs != null ? `${esc(rt.runtime)} · median of 20` : 'runtime loading';
+  const bar = (v, max, cls) => `<i class="mx-bar ${cls}"><em style="width:${max ? Math.max(v > 0 ? 3 : 0, (v / max) * 100) : 0}%"></em></i>`;
+  const metric = (label, tag, a, b, na, nb, max) => `<div class="mx-row"><div class="mx-label">${label}${tag ? ` <span class="mx-tag ${tag[0]}">${tag[1]}</span>` : ''}</div>
+      <div class="mx-cell c17"><b>${a}</b>${max != null ? bar(na, max, 'c17') : ''}</div><div class="mx-cell c22"><b>${b}</b>${max != null ? bar(nb, max, 'c22') : ''}</div></div>`;
+  return `<section class="mech" aria-labelledby="mech-h">
+    <span class="eyebrow"><i class="pip"></i>Two efficiency mechanisms</span>
+    <h2 class="h2" id="mech-h">Reduce the input. <span>Then reduce the reasoning.</span></h2>
+    <div class="mech-grid">
+      <article class="mech-card m1">
+        <header><span class="mech-n">1</span><div><small>Reduce the input</small><b>Groom</b></div><span class="mx-tag lean">measured</span></header>
+        <div class="mech-big"><span>${int(raw)}</span><i>→</i><span class="hi">${int(ev)}</span><em>records</em></div>
+        <div class="mech-bars"><div><i style="width:100%"></i><span>raw · ≈${compact(c.context.rawTokens)} tokens</span></div><div class="lean"><i style="width:${Math.max(0.8, (ev / raw) * 100)}%"></i><span>evidence · ≈${compact(c.context.evidenceTokens)} tokens</span></div></div>
+        <p><b>${(c.context.reduction * 100).toFixed(1)} %</b> fewer tokens reach any model. Ordinary deterministic code, ${ms(c.totals.groomCpuMs)} of CPU in this browser.</p>
+      </article>
+      <article class="mech-card m2">
+        <header><span class="mech-n">2</span><div><small>Reduce the reasoning</small><b>Decide · System 1</b></div><span class="mx-tag s1">in the browser</span></header>
+        <div class="mech-big"><span class="hi s1">${s1lat}</span><em>per triage · €0 · no network call</em></div>
+        <div class="mech-paths">
+          <div class="fast"><small>${esc(r22.incident.rack)} · routine</small><b>fast path</b><span>${s.totals.modelCalls} reasoning calls</span></div>
+          <div class="s2"><small>${esc(r17.incident.rack)} · complex</small><b>System 2</b><span>${c.totals.modelCalls} reasoning calls</span></div>
+        </div>
+        <p>A ${app.modelCard.parameters.toLocaleString('en-US')}-parameter model (${(app.modelCard.onnx.bytes / 1024).toFixed(1)} KB) decides whether agents are needed at all.${rt?.warmMs != null ? ` <span class="muted">${s1src}.</span>` : ''}</p>
+      </article>
+    </div>
+    <div class="mech-compare">
+      <div class="mech-approach trad"><small>Traditional approach</small><div class="mech-line"><span class="chip">Everything</span><i>→</i><span class="chip bad">Large reasoning model</span></div><p>Every request pays for full reasoning.</p></div>
+      <div class="mech-approach lean"><small>LeanAI lean approach</small><div class="mech-line"><span class="chip">Everything</span><i>→</i><span class="chip lean">Groom</span><i>→</i><span class="chip s1">Decide</span><i>→</i><span class="chip a2a">Reason · only when necessary</span></div><p>Reasoning is spent where the gate says it is needed.</p></div>
+    </div>
+    <div class="mx" role="table" aria-label="Telemetry per decision">
+      <div class="mx-head" role="row"><div class="mx-label">Telemetry, per decision</div>
+        <div class="mx-col c17"><b>${esc(r17.incident.rack)}</b><span>complex · ${esc(r17.system1.decisions.preferred_route.label)} → System 2</span></div>
+        <div class="mx-col c22"><b>${esc(r22.incident.rack)}</b><span>routine · ${esc(r22.system1.decisions.preferred_route.label)} → fast path</span></div></div>
+      ${metric('Grooming time', ['lean', 'measured'], ms(c.totals.groomCpuMs), ms(s.totals.groomCpuMs))}
+      ${metric('System 1 triage', ['s1', 'measured'], s1lat, s1lat)}
+      ${metric('System 2 reasoning calls', null, c.totals.modelCalls, s.totals.modelCalls, c.totals.modelCalls, s.totals.modelCalls, c.totals.modelCalls)}
+      ${metric('A2A messages', null, c.totals.a2aMessages, s.totals.a2aMessages, c.totals.a2aMessages, s.totals.a2aMessages, c.totals.a2aMessages)}
+      ${metric('Model tokens', null, int(c.totals.totalTokens), int(s.totals.totalTokens), c.totals.totalTokens, s.totals.totalTokens, c.totals.totalTokens)}
+      ${metric('AI execution cost', ['warn', 'illustrative prices'], eur(c.totals.totalCost, { precise: true }), eur(s.totals.totalCost, { precise: true }), c.totals.totalCost, s.totals.totalCost, c.totals.totalCost)}
+    </div>
+    <div class="mech-avoided">
+      <div class="mech-avoided-head"><span class="mx-tag warn">ESTIMATE</span><b>What triage avoided on ${esc(r22.incident.rack)}</b></div>
+      <div class="mech-avoided-nums"><div><b>${av.reasoningCallsAvoided}</b><span>reasoning calls</span></div><div><b>${int(av.tokensAvoided)}</b><span>model tokens</span></div><div><b>${eur(av.costAvoidedEur, { precise: true })}</b><span>model cost</span></div></div>
+      <p>Basis: ${esc(av.basis)}. On ${esc(r17.incident.rack)} nothing is avoided — the gate correctly sent it to System 2.</p>
     </div>
   </section>`;
 }

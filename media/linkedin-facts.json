@@ -1,0 +1,33 @@
+{
+ "rackKw": 120,
+ "allowancePct": 20,
+ "p95Kw": 869.1,
+ "targetKw": 144,
+ "head1": -13.1,
+ "head2": 25.6,
+ "rawRecords": 11825,
+ "evidenceRecords": 60,
+ "reductionPct": 99.60271715672341,
+ "rawTokens": 759912,
+ "evidenceTokens": 3019,
+ "leanCost": 0.046127424542402776,
+ "bruteCost": 1.5107222399999998,
+ "s1": {
+  "risk": "HIGH",
+  "reasoning": "YES",
+  "route": "ORCHESTRATE",
+  "agents": 4
+ },
+ "approvals": 3,
+ "futureKw": 1469.1,
+ "cap1": 1002.3693677605158,
+ "cap2": 1715.7322124076265,
+ "margin1": -31.76983406435805,
+ "margin2": 16.78797987935652,
+ "req": {
+  "v1": 7,
+  "v2": 8,
+  "total": 8
+ },
+ "options": 3
+}

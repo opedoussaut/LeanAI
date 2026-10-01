@@ -5,29 +5,33 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f5f8fb">
 <meta property="og:title" content="LeanAI · Less noise. Less cost. More value.">
-<meta property="og:description" content="Watch AI agents discover industrial tools, work together, spend tokens — and whether it was worth it. An interactive, fully inspectable demonstrator.">
+<meta property="og:description" content="Watch AI agents groom industrial data, decide, reason, and hand an engineering question to a real MBSE model — every token and euro measured, people deciding. An interactive, fully inspectable demonstrator.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="./docs/social-card.jpg">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="description" content="LeanAI — Less noise. Less cost. More value. An interactive demonstrator of MCP, A2A, lean data preparation and AI economics on a simulated industrial decision.">
+<meta name="description" content="LeanAI — Less noise. Less cost. More value. An interactive demonstrator of decision intelligence, MCP, A2A, lean data preparation, AI economics and MBSE-backed engineering decisions on a simulated AI-factory case.">
 <title>LeanAI · Less noise. Less cost. More value.</title>
 <link rel="icon" href="./favicon.svg">
 <link rel="stylesheet" href="./styles/app.css">
+<link rel="stylesheet" href="./styles/engineering.css">
 </head>
 <body>
 <a href="#main" class="skip-link">Skip to content</a>
 <header class="nav">
   <div class="nav-inner">
-    <a class="brand" href="#learn" aria-label="LeanAI — Learn">
+    <a class="brand" href="#story" aria-label="LeanAI — home">
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" width="34" height="34"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1aa3d6"/><stop offset="1" stop-color="#0a5fae"/></linearGradient></defs><circle cx="16" cy="16" r="15" fill="url(#bm)"/><circle cx="16" cy="16" r="3.2" fill="#fff"/><g stroke="#fff" stroke-width="1.4" fill="none" stroke-linecap="round" opacity=".92"><path d="M16 5.5v5M16 21.5v5M5.5 16h5M21.5 16h5"/><circle cx="16" cy="16" r="8" opacity=".45"/></g></svg></span>
       <span class="brand-text"><strong>Lean<span>AI</span></strong><small>Less noise. Less cost. More value.</small></span>
     </a>
     <nav class="tabs" role="tablist" aria-label="Sections">
-      <button role="tab" id="tab-learn" data-page="learn" aria-controls="page-learn" aria-selected="true"><i>01</i>Learn</button>
-      <button role="tab" id="tab-demo" data-page="demo" aria-controls="page-demo" aria-selected="false" tabindex="-1"><i>02</i>Live demo</button>
-      <button role="tab" id="tab-economics" data-page="economics" aria-controls="page-economics" aria-selected="false" tabindex="-1"><i>03</i>AI economics</button>
-      <button role="tab" id="tab-scale" data-page="scale" aria-controls="page-scale" aria-selected="false" tabindex="-1"><i>04</i>At scale</button>
-      <button role="tab" id="tab-technical" data-page="technical" aria-controls="page-technical" aria-selected="false" tabindex="-1"><i>05</i>Technical view</button>
+      <button role="tab" id="tab-story" data-page="story" aria-controls="page-story" aria-selected="false" tabindex="-1"><i>01</i>The story</button>
+      <button role="tab" id="tab-learn" data-page="learn" aria-controls="page-learn" aria-selected="true"><i>02</i>Learn</button>
+      <button role="tab" id="tab-demo" data-page="demo" aria-controls="page-demo" aria-selected="false" tabindex="-1"><i>03</i>Live demo</button>
+      <button role="tab" id="tab-economics" data-page="economics" aria-controls="page-economics" aria-selected="false" tabindex="-1"><i>04</i>AI economics</button>
+      <button role="tab" id="tab-scale" data-page="scale" aria-controls="page-scale" aria-selected="false" tabindex="-1"><i>05</i>At scale</button>
+      <button role="tab" id="tab-prereq" data-page="prereq" aria-controls="page-prereq" aria-selected="false" tabindex="-1"><i>06</i>Prerequisites</button>
+      <button role="tab" id="tab-technical" data-page="technical" aria-controls="page-technical" aria-selected="false" tabindex="-1"><i>07</i>Technical view</button>
+      <button role="tab" id="tab-engineering" data-page="engineering" aria-controls="page-engineering" aria-selected="false" tabindex="-1"><i>08</i>Engineering</button>
     </nav>
     <div class="nav-actions"><button class="glossary-btn" id="glossary-btn" type="button" title="Plain-language glossary">? Glossary</button>
     <button class="run-pill" id="run-pill" type="button" aria-live="polite" title="Go to the live demo"><span class="dot"></span><b>Idle</b><em>Ready</em></button></div>
@@ -38,7 +42,10 @@
   <section class="page" id="page-demo" role="tabpanel" aria-labelledby="tab-demo" hidden></section>
   <section class="page" id="page-economics" role="tabpanel" aria-labelledby="tab-economics" hidden></section>
   <section class="page" id="page-scale" role="tabpanel" aria-labelledby="tab-scale" hidden></section>
+  <section class="page" id="page-prereq" role="tabpanel" aria-labelledby="tab-prereq" hidden></section>
   <section class="page" id="page-technical" role="tabpanel" aria-labelledby="tab-technical" hidden></section>
+  <section class="page" id="page-story" role="tabpanel" aria-labelledby="tab-story" hidden></section>
+  <section class="page" id="page-engineering" role="tabpanel" aria-labelledby="tab-engineering" hidden></section>
 </main>
 <footer class="site-foot">
   <span>Simulated industrial scenario · illustrative data and pricing · no customer system connected</span>

@@ -4,15 +4,17 @@ import { esc, $, int, compact, eur, bytes, ms, pct, clock, signedMm } from './fo
 import { modelCost } from '../engine/telemetry.js';
 import { explainerMarkup, STEP_TEXT } from './grooming.js';
 import { explainGrooming } from '../scenarios/ai-factory/explain.js';
+import { COMPANIONS, skillName } from '../domain/positioning.js';
 
 const STATES = [
-  { id: 'INGESTING', label: 'Ingest', c: '#7e95a8' }, { id: 'GROOMING', label: 'Groom', c: 'var(--lean)' }, { id: 'ORCHESTRATING', label: 'Orchestrate', c: 'var(--a2a)' },
-  { id: 'ANALYZING', label: 'Analyze', c: 'var(--mcp)' }, { id: 'DECIDING', label: 'Decide', c: 'var(--model)' }, { id: 'COMPLETED', label: 'Measure', c: 'var(--ok)' }
+  { id: 'INGESTING', label: 'Observe', c: '#7e95a8' }, { id: 'GROOMING', label: 'Groom', c: 'var(--lean)' }, { id: 'SYSTEM1', label: 'Triage · System 1', c: 'var(--s1)' },
+  { id: 'ORCHESTRATING', label: 'System 2 · orchestrate', c: 'var(--a2a)' }, { id: 'ANALYZING', label: 'System 2 · reason & act', c: 'var(--mcp)' }, { id: 'ACTING', label: 'Fast path · act', c: 'var(--s1-hi)' },
+  { id: 'DECIDING', label: 'Approve', c: 'var(--model)' }, { id: 'COMPLETED', label: 'Measure', c: 'var(--ok)' }
 ];
-const KIND_TAG = { mcp: ['mcp', 'MCP'], a2a: ['a2a', 'A2A'], model: ['model', 'MODEL'], groom: ['lean', 'LEAN'], ingest: ['neutral', 'DATA'], discover: ['mcp', 'MCP'], incident: ['bad', 'INCIDENT'], decision: ['ok', 'DECISION'] };
+const KIND_TAG = { decide: ['s1', 'SYSTEM 1'], human: ['human', 'PEOPLE'], mcp: ['mcp', 'MCP'], a2a: ['a2a', 'A2A'], model: ['model', 'MODEL'], groom: ['lean', 'LEAN'], ingest: ['neutral', 'DATA'], discover: ['mcp', 'MCP'], incident: ['bad', 'INCIDENT'], decision: ['ok', 'DECISION'] };
 
 // ---------- Canvas geometry (viewBox 800 × 450) ----------
-const AG_Y = 196, AG_H = 70, AG_W = 164, SV_Y = 382, SV_H = 54;
+const AG_Y = 196, AG_H = 84, AG_W = 176, SV_Y = 382, SV_H = 54;
 let AGENT_X = {}, SERVER_X = {}, MCP_EDGES = [], PAIRS = [];
 const pairId = (a, b) => [a, b].sort().join('--');
 /** Layout derived from the scenario: specialists in slots, servers in slots, edges from the run script. */
@@ -32,68 +34,121 @@ function arcPath(a, b) {
   return `M${s} ${AG_Y} Q${(s + e) / 2} ${AG_Y - 2 * h} ${e} ${AG_Y}`;
 }
 const spokePath = id => `M400 70 C400 138 ${AGENT_X[id]} 128 ${AGENT_X[id]} ${AG_Y}`;
-const mcpPath = (a, sid) => { const ax = AGENT_X[a], sx = SERVER_X[sid]; return `M${ax} ${AG_Y + AG_H} C${ax} 326 ${sx} 332 ${sx} ${SV_Y}`; };
+const mcpPath = (a, sid) => { const ax = AGENT_X[a], sx = SERVER_X[sid]; return `M${ax} ${AG_Y + AG_H} C${ax} 332 ${sx} 336 ${sx} ${SV_Y}`; };
 const SV_W = 138;
 
 function nodeIcon(name, x, y, size = 18) { return `<g transform="translate(${x} ${y})">${icon(name, size, 1.7)}</g>`; }
 
+// People row (global coordinates; agents and tools are drawn 86 px lower).
+// Layout, top to bottom: PEOPLE · SYSTEM 1 TRIAGE (every request) · SYSTEM 2 (only when escalated) · SKILLS via MCP · systems.
+const TB_Y = 106, TB_H = 166, OY = TB_Y + TB_H + 10, HUMAN_X = { owner: 400, clusterops: 140, facility: 660 }, HU_Y = 26, HU_W = 164, HU_H = 50;
+const humanEdges = [['owner', 'orchestrator'], ['clusterops', 'workload'], ['facility', 'orchestrator'], ['clusterops', 'facility']];
+const hid = (a, b) => `e-h-${[a, b].sort().join('--')}`;
+function humanPath(a, b) {
+  const x = HUMAN_X[a], bottom = HU_Y + HU_H;
+  // routed around the triage band so people ↔ System 2 edges never cross the System 1 nodes
+  if (b === 'orchestrator') return a === 'owner' ? `M${x} ${bottom} C${x} ${bottom + 22} 590 ${bottom + 14} 590 ${TB_Y + 40} L590 ${OY - 12} C590 ${OY + 2} 560 ${OY + 10} 540 ${OY + 22}` : `M${x} ${bottom} C${x} ${OY + 30} ${x - 60} ${OY + 42} 540 ${OY + 42}`;
+  if (b === 'workload') return `M${x} ${bottom} C${x} ${bottom + 20} 262 ${bottom + 16} 262 ${TB_Y + 40} L262 ${OY + 150} C262 ${OY + 176} ${AGENT_X.workload - 30} ${OY + 180} ${AGENT_X.workload} ${AG_Y + OY}`;
+  // person ↔ person: an arc under the people row, so it does not cross the Program Owner
+  return `M${x + 30} ${bottom} C${x + 120} ${bottom + 26} ${HUMAN_X[b] - 120} ${bottom + 26} ${HUMAN_X[b] - 30} ${bottom}`;
+}
+function humansSvg(sc) {
+  if (!sc.humans?.length) return '';
+  const node = h => { const x = HUMAN_X[h.id] - HU_W / 2; return `<g class="node human" id="n-${h.id}"><rect class="box" x="${x}" y="${HU_Y}" width="${HU_W}" height="${HU_H}" rx="25"/><circle class="ic-bg" cx="${x + 25}" cy="${HU_Y + 25}" r="16"/><g class="ic">${nodeIcon('person', x + 16, HU_Y + 16)}</g><text class="name" x="${x + 48}" y="${HU_Y + 22}" style="font-size:12px">${esc(h.name)}</text><text class="role" x="${x + 48}" y="${HU_Y + 37}">${esc(h.title)}</text></g>`; };
+  return `<rect class="band-human" x="0" y="0" width="800" height="${HU_Y + HU_H + 12}" rx="14"/><text class="band-label human" x="14" y="17">PEOPLE · ASSIGN · APPROVE · DECIDE</text>
+    <g id="h-edges">${humanEdges.map(([a, b]) => `<path class="edge human" id="${hid(a, b)}" d="${humanPath(a, b)}"/>`).join('')}</g>
+    ${sc.humans.map(node).join('')}`;
+}
+
+// SYSTEM 1 · TRIAGE band (global coordinates)
+const S1N = { x: 290, y: TB_Y + 24, w: 220, h: 46 }, GATE = { x: 305, y: TB_Y + 92, w: 190, h: 42 }, FAST = { x: 16, y: TB_Y + 92, w: 200, h: 42 };
+function triageSvg() {
+  const node = (id, b, ic, name, role) => `<g class="node tri ${id}" id="n-${id}"><rect class="box" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${b.h / 2}"/><circle class="ic-bg" cx="${b.x + b.h / 2}" cy="${b.y + b.h / 2}" r="${b.h / 2 - 6}"/><g class="ic">${nodeIcon(ic, b.x + b.h / 2 - 8, b.y + b.h / 2 - 8, 16)}</g><text class="name" x="${b.x + b.h + 2}" y="${b.y + b.h / 2 - 3}" style="font-size:12px">${name}</text><text class="role" x="${b.x + b.h + 2}" y="${b.y + b.h / 2 + 11}" id="m-${id}">${role}</text></g>`;
+  const gx = GATE.x + GATE.w / 2;
+  return `<rect class="band-s1" x="0" y="${TB_Y}" width="800" height="${TB_H}" rx="14"/>
+    <text class="band-label s1" x="14" y="${TB_Y + 17}">SYSTEM 1 · TRIAGE</text><text class="band-sub" x="14" y="${TB_Y + 31}">every request · in this browser</text>
+    <text class="band-sub" x="${S1N.x - 12}" y="${S1N.y + S1N.h / 2 + 4}" text-anchor="end" id="tri-in">groomed evidence → 9 features</text>
+    <g id="tri-edges">
+      <path class="edge tri" id="e-tri-s1-gate" d="M${gx} ${S1N.y + S1N.h} L${gx} ${GATE.y}"/>
+      <path class="edge tri fast" id="e-tri-gate-fast" d="M${GATE.x} ${GATE.y + GATE.h / 2} L${FAST.x + FAST.w} ${FAST.y + FAST.h / 2}"/>
+      <path class="edge tri s2" id="e-tri-gate-s2" d="M${gx} ${GATE.y + GATE.h} L${gx} ${OY + 14}"/>
+      <path class="edge tri fast" id="e-tri-fast-dep" d="M${FAST.x + 78} ${FAST.y + FAST.h} C${FAST.x + 78} ${OY + 120} ${AGENT_X.deployment} ${OY + 150} ${AGENT_X.deployment} ${OY + AG_Y}"/>
+    </g>
+    <text class="tri-lbl fast" x="${(GATE.x + FAST.x + FAST.w) / 2}" y="${GATE.y + GATE.h / 2 - 16}" text-anchor="middle">confident</text>
+    <text class="tri-lbl fast" x="${(GATE.x + FAST.x + FAST.w) / 2}" y="${GATE.y + GATE.h / 2 - 5}" text-anchor="middle">&amp; bounded</text>
+    <text class="tri-lbl s2" x="${gx + 10}" y="${GATE.y + GATE.h + 18}">complex or uncertain → System 2</text>
+    ${node('s1', S1N, 'cpu', 'Decision model', 'waits for groomed evidence')}
+    ${node('gate', GATE, 'shield', 'Confidence gate', 'act alone only if ≥ 75 % sure')}
+    ${node('fast', FAST, 'bolt', 'Fast path · bounded act', 'no reasoning model')}`;
+}
+
 function canvasSvg(sc) {
   const agents = sc.agents.filter(a => a.id !== 'orchestrator');
   const orch = sc.agents.find(a => a.id === 'orchestrator');
-  const agentNode = a => { const x = AGENT_X[a.id] - AG_W / 2; return `<g class="node agent" id="n-${a.id}" data-agent="${a.id}"><rect class="box" x="${x}" y="${AG_Y}" width="${AG_W}" height="${AG_H}" rx="14"/><rect class="ic-bg" x="${x + 12}" y="${AG_Y + 13}" width="30" height="30" rx="9"/><g class="ic">${nodeIcon(a.icon, x + 18, AG_Y + 19)}</g><text class="name" x="${x + 52}" y="${AG_Y + 27}">${esc(a.name.replace(' Agent', ''))}</text><text class="role" x="${x + 52}" y="${AG_Y + 42}">${esc(a.tagline)}</text><text class="meta" x="${x + 12}" y="${AG_Y + 60}" id="m-${a.id}">idle</text><circle class="think" cx="${x + AG_W - 13}" cy="${AG_Y + 13}" r="4"/></g>`; };
+  const agentNode = a => { const x = AGENT_X[a.id] - AG_W / 2; return `<g class="node agent" id="n-${a.id}" data-agent="${a.id}"><title>${esc(`${a.companion} · ${a.competence} — ${COMPANIONS[a.companion]?.line ?? ''}`)}</title><rect class="box" x="${x}" y="${AG_Y}" width="${AG_W}" height="${AG_H}" rx="14"/><rect class="ic-bg" x="${x + 12}" y="${AG_Y + 12}" width="30" height="30" rx="9"/><g class="ic">${nodeIcon(a.icon, x + 18, AG_Y + 18)}</g><text class="name" x="${x + 50}" y="${AG_Y + 25}">${esc(a.name.replace(' Agent', ''))}</text><text class="role" x="${x + 50}" y="${AG_Y + 40}">${esc(a.tagline)}</text><text class="companion" x="${x + 12}" y="${AG_Y + 59}"><tspan class="cmp ${a.companion.toLowerCase()}">${esc(a.companion)}</tspan> · ${esc(a.competence.split(' · ')[0])}</text><text class="meta" x="${x + 12}" y="${AG_Y + 75}" id="m-${a.id}">idle</text><text class="tri-tag" x="${x + AG_W - 6}" y="${AG_Y - 6}" text-anchor="end" id="t-${a.id}"></text><circle class="think" cx="${x + AG_W - 13}" cy="${AG_Y + 13}" r="4"/></g>`; };
   const serverNode = s => { const x = SERVER_X[s.id] - SV_W / 2; return `<g class="node server" id="n-${s.id}"><rect class="box" x="${x}" y="${SV_Y}" width="${SV_W}" height="${SV_H}" rx="12"/><rect class="ic-bg" x="${x + 10}" y="${SV_Y + 12}" width="28" height="28" rx="8"/><g class="ic">${nodeIcon(s.icon, x + 15, SV_Y + 17)}</g><text class="name" x="${x + 46}" y="${SV_Y + 24}" style="font-size:12px">${esc(s.short)}</text><text class="role" x="${x + 46}" y="${SV_Y + 38}">${esc(s.system)}</text><text class="meta" x="${x + 46}" y="${SV_Y + 50}" id="m-${s.id}"></text></g>`; };
-  return `<svg class="orch-svg" viewBox="0 0 800 450" role="img" aria-label="Agents, MCP tool connections and A2A messages">
-    <rect class="band-a2a" x="0" y="84" width="800" height="104" rx="14"/><text class="band-label a2a" x="14" y="101">A2A · AGENT ↔ AGENT</text>
-    <rect class="band-mcp" x="0" y="274" width="800" height="100" rx="14"/><text class="band-label mcp" x="14" y="291">MCP · AGENT ↔ TOOLS &amp; DATA</text>
+  return `<svg class="orch-svg" viewBox="0 0 800 ${450 + OY}" role="img" aria-label="People; System 1 triage with a confidence gate; System 2 agents with A2A at the open layer, engaged only when the gate escalates; skills reached through MCP">
+    ${humansSvg(sc)}
+    ${triageSvg()}
+    <g transform="translate(0 ${OY})">
+    <rect class="band-s2" x="0" y="-4" width="800" height="${AG_Y + AG_H + 12}" rx="14"/>
+    <text class="band-label s2" x="14" y="13">SYSTEM 2 · DELIBERATE</text><text class="band-sub" x="14" y="27">only when the gate escalates</text>
+    <rect class="band-a2a" x="0" y="84" width="800" height="104" rx="14"/><text class="band-label a2a" x="14" y="101">OPEN LAYER · AGENT ↔ AGENT (A2A)</text>
+    <g class="s2-banner" id="s2-banner"><rect x="560" y="10" width="232" height="58" rx="12"/><text x="676" y="33" text-anchor="middle" id="s2-banner-1">NOT ENGAGED</text><text x="676" y="51" text-anchor="middle" id="s2-banner-2">0 model calls</text></g>
+    <line class="open-boundary" x1="0" x2="800" y1="188" y2="188"/>
+    <rect class="band-mcp" x="0" y="286" width="800" height="90" rx="14"/><text class="band-label mcp" x="14" y="303">SKILLS · INSIDE EACH COMPETENCE · EXECUTED VIA MCP</text>
     <g id="edges">
       ${agents.map(a => `<path class="edge a2a" id="e-orch--${a.id}" d="${spokePath(a.id)}"/>`).join('')}
       ${PAIRS.map(([a, b]) => `<path class="edge a2a idle-arc" id="e-${pairId(a, b)}" d="${arcPath(a, b)}"/>`).join('')}
       ${MCP_EDGES.map(([a, sv]) => `<path class="edge mcp" id="e-${a}--${sv}" d="${mcpPath(a, sv)}"/>`).join('')}
     </g>
-    ${MCP_EDGES.map(([a, sv]) => { const mx = (AGENT_X[a] + SERVER_X[sv]) / 2; return `<g class="mcp-pill" id="p-${a}--${sv}"><rect x="${mx - 17}" y="320" width="34" height="15" rx="7.5"/><text x="${mx}" y="330.6" text-anchor="middle">MCP</text></g>`; }).join('')}
-    <g class="node orch" id="n-orchestrator"><rect class="box" x="260" y="14" width="280" height="56" rx="14"/><rect class="ic-bg" x="272" y="27" width="30" height="30" rx="9"/><g class="ic">${nodeIcon(orch.icon, 278, 33)}</g><text class="name" x="312" y="38">${esc(orch.name)}</text><text class="role" x="312" y="53">${esc(orch.tagline)}</text><text class="meta" x="526" y="38" text-anchor="end" id="m-orchestrator"></text><circle class="think" cx="530" cy="22" r="3.5"/></g>
+    ${MCP_EDGES.map(([a, sv]) => { const mx = (AGENT_X[a] + SERVER_X[sv]) / 2; return `<g class="mcp-pill" id="p-${a}--${sv}"><rect x="${mx - 17}" y="328" width="34" height="15" rx="7.5"/><text x="${mx}" y="338.6" text-anchor="middle">MCP</text></g>`; }).join('')}
+    <g class="clash-arc" id="clash-arc"><path d="M${AGENT_X.deployment + 60} ${AG_Y - 4} Q${AGENT_X.workload} ${AG_Y - 78} ${AGENT_X.cooling - 60} ${AG_Y - 4}"/><g transform="translate(${AGENT_X.workload} ${AG_Y - 42})"><rect x="-74" y="-12" width="148" height="24" rx="12"/><text y="4" text-anchor="middle" id="clash-arc-t">CLASH · −13.1 kW</text></g></g>
+    <g class="node orch" id="n-orchestrator"><rect class="box" x="260" y="14" width="280" height="56" rx="14"/><rect class="ic-bg" x="272" y="27" width="30" height="30" rx="9"/><g class="ic">${nodeIcon(orch.icon, 278, 33)}</g><text class="name" x="312" y="38">${esc(orch.name)}</text><text class="role" x="312" y="53"><tspan class="cmp ${orch.companion.toLowerCase()}">${esc(orch.companion)}</tspan> · ${esc(orch.competence)} · plans &amp; coordinates</text><text class="meta" x="526" y="38" text-anchor="end" id="m-orchestrator"></text><circle class="think" cx="530" cy="22" r="3.5"/></g>
     ${agents.map(agentNode).join('')}
     ${sc.servers.map(serverNode).join('')}
     <g id="pulses"></g>
+    </g>
+    <g id="h-pulses"></g>
   </svg>`;
 }
 
 /** Loop A capacity gauge. Values appear only once they have been computed by the run. */
 function gaugeMarkup(inc, run) {
-  const lo = 700, hi = 1060, x = v => ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * 100;
   const target = inc.itKw * (1 + inc.allowancePct / 100);
   const summary = run.grooming.evidenceList.find(e => e.type === 'LOOP_SUMMARY');
   const p95 = summary?.v.p95Kw ?? null;
+  const lo = inc.loop === 'A' ? 700 : 300, hi = 1060, x = v => ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * 100;
   const releasedKw = run.a2aMessages.find(m => m.from === 'workload')?.data.releasedKw ?? 0;
   const confirmed = run.a2aMessages.some(m => m.from === 'cooling' && m.data.condition);
   const load = p95 == null ? null : p95 - (confirmed ? releasedKw : 0);
   const headroom = load == null ? null : inc.loopCapacityKw - load - target;
   const head = p95 == null ? `<span class="muted">measured load not yet computed</span>` : `<b style="color:${headroom >= 0 ? 'var(--ok)' : 'var(--bad)'}">${headroom >= 0 ? '+' : '−'}${Math.abs(headroom).toFixed(1)} kW</b>`;
   const seg = (a, b, cls, title) => `<div class="cap-seg ${cls}" style="left:${x(a)}%;width:${Math.max(0, x(b) - x(a))}%" title="${esc(title)}"></div>`;
-  return `<div class="gauge"><div class="gauge-head"><span>Loop A · normal peak load (p95) + new rack vs ${int(inc.loopCapacityKw)} kW usable</span>${head}</div>
-    <div class="cap-track" role="img" aria-label="Loop A capacity gauge">
+  return `<div class="gauge"><div class="gauge-head"><span>Loop ${inc.loop} · normal peak load (p95) + new rack vs ${int(inc.loopCapacityKw)} kW usable</span>${head}</div>
+    <div class="cap-track" role="img" aria-label="Loop ${inc.loop} capacity gauge">
       ${load == null ? seg(lo, hi, 'unknown', 'Measured during grooming') : seg(lo, load, 'load', `p95 ${load.toFixed(1)} kW`)}
       ${confirmed ? seg(load, p95, 'freed', `released ${releasedKw} kW`) : ''}
-      ${load == null ? '' : seg(load, load + target, headroom >= 0 ? 'rack ok' : 'rack over', `R-17 target ${target} kW`)}
+      ${load == null ? '' : seg(load, load + target, headroom >= 0 ? 'rack ok' : 'rack over', `${inc.rack} target ${target} kW`)}
       <div class="cap-limit" style="left:${x(inc.loopCapacityKw)}%"></div>
     </div>
-    <div class="gauge-scale">${[700, 800, 900, 1000].map(v => `<span style="left:${x(v)}%">${v}</span>`).join('')}<span style="left:${x(1052)}%">kW</span></div>
-    <div class="cap-legend"><span><i class="load"></i>measured normal peak (p95)</span><span><i class="rack"></i>R-17 + 20 % (${target} kW)</span>${confirmed ? '<span><i class="freed"></i>released</span>' : ''}<span><i class="limit"></i>usable capacity</span></div></div>`;
+    <div class="gauge-scale">${(inc.loop === 'A' ? [700, 800, 900, 1000] : [300, 500, 700, 900]).map(v => `<span style="left:${x(v)}%">${v}</span>`).join('')}<span style="left:${x(1052)}%">kW</span></div>
+    <div class="cap-legend"><span><i class="load"></i>measured normal peak (p95)</span><span><i class="rack"></i>${inc.rack} + 20 % (${target} kW)</span>${confirmed ? '<span><i class="freed"></i>released</span>' : ''}<span><i class="limit"></i>usable capacity</span></div></div>`;
 }
 
 export function mountDemo(el, app) {
   const { scenario: sc, engine } = app;
-  const inc = sc.incident;
+  let inc = engine.run.incident ?? sc.incident;
   let lastActiveKey = '', lastLogCount = 0;
   layout(sc);
 
   el.innerHTML = `
   <div class="demo-head">
-    <div><span class="eyebrow"><i class="pip"></i>Live demo · AI factory · simulated scenario</span><h1 class="h2">One rack. One loop. <span>Four specialists.</span></h1></div>
+    <div><span class="eyebrow"><i class="pip"></i>Live demo · AI factory · simulated scenario</span><h1 class="h2">One rack. One loop. <span id="demo-h-tail">Four specialists.</span></h1></div>
   </div>
   <div class="glass incident-bar">
-    <div><div class="incident-id"><span class="tag mcp">${icon('rack', 13)} ${esc(inc.id)}</span><span class="small muted">${esc(inc.site)} · received ${new Date(inc.detectedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })}</span></div>
-      <div class="incident-title">${esc(inc.title)}</div><div class="incident-sub">${esc(inc.rack)} · ${esc(inc.model)} · ${inc.itKw} kW design IT · ${esc(inc.position)} · ${esc(inc.plannedForLabel)}</div></div>
+    <div><div class="req-switch seg" role="group" aria-label="Request">${Object.values(sc.requests).map(r => `<button type="button" data-req="${r.key}" aria-pressed="${r.key === engine.requestKey}" title="${esc(r.label)}"><b>${esc(r.key)}</b> ${esc(r.short)}</button>`).join('')}</div>
+      <div id="incident-head"></div></div>
     <div id="gauge"></div>
     <div class="controls">
       <button class="btn primary" id="btn-run"></button>
@@ -107,6 +162,7 @@ export function mountDemo(el, app) {
     <div class="narration"><span class="count" id="story-count"></span><p id="narration"></p></div>
     <div class="progress"><i id="progress"></i></div>
   </div>
+  <section class="s1-band" id="s1" aria-labelledby="s1-title"></section>
   <div class="stage">
     <section class="panel" aria-labelledby="pipe-title">
       <div class="panel-title"><span class="eyebrow" id="pipe-title">${icon('funnel', 14)} Lean context pipeline</span><span class="tag lean">deterministic</span></div>
@@ -117,8 +173,9 @@ export function mountDemo(el, app) {
     </section>
     <section class="panel canvas-panel" aria-labelledby="orch-title">
       <div class="panel-title"><span class="eyebrow" id="orch-title">${icon('orbit', 14)} Orchestration</span><span class="small muted" id="sim-clock"></span></div>
+      <div class="clash" id="clash" hidden aria-live="assertive"></div>
       <div class="canvas-wrap">${canvasSvg(sc)}</div>
-      <div class="legend"><span><i></i>MCP · agent ↔ tool / data</span><span><i class="a2a"></i>A2A · agent ↔ agent</span><span><i class="model"></i>Model reasoning</span></div>
+      <div class="legend"><span><i class="s1"></i>System 1 · triage</span><span><i class="fast"></i>Fast path · bounded</span><span><i class="human"></i>People ↔ agents / people</span><span><i class="a2a"></i>A2A · the open layer, agent ↔ agent</span><span><i></i>MCP · inside an agent, agent ↔ its tools</span><span><i class="model"></i>Model reasoning</span></div>
       <div class="now-card" id="now" aria-live="polite"></div>
     </section>
     <section class="panel" aria-labelledby="tele-title">
@@ -126,12 +183,19 @@ export function mountDemo(el, app) {
       <div id="telemetry"></div>
     </section>
   </div>
+  <div id="loop"></div>
   <div id="recommendation"></div>
   <div id="run-error"></div>
   <section class="panel log" aria-labelledby="log-title"><div class="panel-title"><span class="eyebrow" id="log-title">${icon('message', 14)} Exchange log</span><button class="btn sm ghost" id="to-technical">Full trace in Technical view ${icon('arrow', 14)}</button></div><div class="log-list" id="log"></div></section>`;
 
   // ---------- Controls ----------
   $('#btn-run', el).addEventListener('click', () => engine.toggle());
+  el.querySelectorAll('[data-req]').forEach(b => b.addEventListener('click', () => {
+    if (engine.run.status === 'running' || engine.run.status === 'paused') return;
+    engine.setRequest(b.dataset.req); lastActiveKey = ''; lastLogCount = 0;
+    el.querySelectorAll('[data-req]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+  $('#s1', el).addEventListener('click', e => { if (e.target.closest('[data-s1-inspect]')) inspectSystem1(app, engine.run); });
   $('#btn-step', el).addEventListener('click', () => engine.step());
   $('#btn-reset', el).addEventListener('click', () => { engine.reset(); lastActiveKey = ''; lastLogCount = 0; });
   el.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => { engine.setSpeed(Number(b.dataset.speed)); el.querySelectorAll('[data-speed]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
@@ -145,13 +209,20 @@ export function mountDemo(el, app) {
 
   function update() {
     const { run, metrics } = app.live();
+    inc = run.incident ?? sc.incident;
     renderControls(run);
+    $('#incident-head', el).innerHTML = `<div class="incident-id"><span class="tag mcp">${icon('rack', 13)} ${esc(inc.id)}</span><span class="small muted">${esc(inc.site)} · received ${new Date(inc.detectedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })}</span></div>
+      <div class="incident-title">${esc(inc.title)}</div><div class="incident-sub">${esc(inc.rack)} · ${esc(inc.model)} · ${inc.itKw} kW design IT · ${esc(inc.position)} · ${esc(inc.plannedForLabel)}</div>`;
+    { const tail = $('#demo-h-tail', el), want = engine.requestCfg?.kind === 'simple' ? 'One small model decides.' : 'Four specialists.'; if (tail && tail.textContent !== want) tail.textContent = want; }
+    el.querySelectorAll('[data-req]').forEach(x => { x.disabled = run.status === 'running' || run.status === 'paused'; x.setAttribute('aria-pressed', String(x.dataset.req === engine.requestKey)); });
     $('#gauge', el).innerHTML = gaugeMarkup(inc, run);
+    $('#s1', el).innerHTML = system1Markup(run, app);
     renderRail(run);
     renderPipeline(run, metrics);
     renderCanvas(run, metrics);
     renderNow(run, metrics);
     renderTelemetry(run, metrics);
+    renderLoop(run);
     renderRecommendation(run);
     renderLog(run);
     $('#run-error', el).innerHTML = run.status === 'error' ? `<div class="error-box">${esc(run.error)} — reset and run again.</div>` : '';
@@ -166,15 +237,15 @@ export function mountDemo(el, app) {
   }
 
   function renderRail(run) {
-    const idx = STATES.findIndex(s => s.id === run.state);
-    el.querySelectorAll('.state-chip').forEach((c, i) => { c.classList.toggle('on', i === idx); c.classList.toggle('done', idx > i); });
+    const idx = STATES.findIndex(s => s.id === run.state), seen = new Set(run.events.map(e => e.state));
+    el.querySelectorAll('.state-chip').forEach((c, i) => { const visited = seen.has(STATES[i].id); c.classList.toggle('on', i === idx); c.classList.toggle('done', idx > i && visited); c.classList.toggle('skipped', idx > i && !visited && run.status !== 'idle'); });
     const story = sc.story.find(s => s.n === run.story);
     $('#story-count', el).textContent = run.story ? `${String(run.story).padStart(2, '0')} / 10` : '00 / 10';
     const lead = run.status === 'completed' ? 'We compare AI cost with generated industrial value.' : story?.line;
     const detail = run.status === 'completed' ? 'Open AI economics to see whether it was worth it.' : run.narration;
     $('#narration', el).innerHTML = lead ? `${esc(lead)} <span>— ${esc(detail)}</span>` : esc(run.narration);
     if (run.status === 'completed') $('#story-count', el).textContent = '10 / 10';
-    $('#progress', el).style.width = `${run.status === 'idle' ? 0 : ((run.stepIndex + 1) / run.totalSteps) * 100}%`;
+    $('#progress', el).style.width = `${run.status === 'idle' ? 0 : (run.executed / run.totalSteps) * 100}%`;
     $('#sim-clock', el).innerHTML = run.status === 'idle' ? 'simulated time 00:00.0' : `simulated time <b class="num">${clock(run.simTimeMs)}</b>`;
   }
 
@@ -214,7 +285,10 @@ export function mountDemo(el, app) {
       const calls = run.mcpCalls.filter(c => c.server === s.id).length, disc = run.discoveries.find(d => d.server === s.id);
       n.classList.toggle('active', a?.kind === 'mcp' && a.ref && run.mcpCalls.at(-1)?.server === s.id || a?.kind === 'discover' && ev?.ref?.server === s.id);
       n.classList.toggle('used', usedServers.has(s.id) || !!disc);
-      $(`#m-${s.id}`, el).textContent = calls ? `${calls} call${calls > 1 ? 's' : ''}` : disc ? `${disc.tools.length} tool${disc.tools.length > 1 ? 's' : ''}` : '';
+      const live = a?.kind === 'mcp' && run.mcpCalls.at(-1)?.server === s.id ? run.mcpCalls.at(-1) : null;
+      const extracting = a?.kind === 'ingest' && SOURCE_SERVER[ev?.ref?.source] === s.id;
+      n.classList.toggle('extract', extracting);
+      $(`#m-${s.id}`, el).textContent = live ? `▶ ${live.tool}` : extracting ? '▶ extracting data' : a?.kind === 'discover' && ev?.ref?.server === s.id ? '▶ tools/list' : calls ? `${calls} call${calls > 1 ? 's' : ''}` : disc ? `${disc.tools.length} tool${disc.tools.length > 1 ? 's' : ''}` : '';
     }
     // edges: used / active
     el.querySelectorAll('#edges .edge').forEach(p => p.classList.remove('active', 'used'));
@@ -233,10 +307,77 @@ export function mountDemo(el, app) {
     } else if (a?.kind === 'discover') {
       el.querySelectorAll(`.edge.mcp[id$="--${ev.ref.server}"]`).forEach(e => e.classList.add('active'));
     }
-    if (key !== lastActiveKey) { $('#pulses', el).innerHTML = pulse; lastActiveKey = key; }
-    if (!a) $('#pulses', el).innerHTML = '';
+    // People
+    for (const [id, h] of Object.entries(run.humans ?? {})) { const n = $(`#n-${id}`, el); if (!n) continue; n.classList.toggle('active', h.status === 'active' && a?.kind === 'human'); n.classList.toggle('done', h.status === 'done' || (h.status === 'active' && a?.kind !== 'human')); }
+    el.querySelectorAll('#h-edges .edge').forEach(p => p.classList.remove('active', 'used'));
+    const hEdge = x => { const pair = [x.from, x.to]; const k = humanEdges.find(([p, q]) => pair.includes(p) && pair.includes(q)); return k ? hid(...k) : null; };
+    for (const x of run.humanActions ?? []) { const id = hEdge(x); if (id) $(`#${id}`, el)?.classList.add('used'); }
+    let hpulse = '';
+    if (a?.kind === 'human') {
+      const x = run.humanActions.at(-1), id = hEdge(x);
+      if (id) { $(`#${id}`, el)?.classList.add('active'); const k = humanEdges.find(([p, q]) => hid(p, q) === id); hpulse = dot(id, '#c07a1e', k[0] === x.from ? '0;1' : '1;0', 1.4); }
+    }
+    if (key !== lastActiveKey) { $('#pulses', el).innerHTML = pulse; $('#h-pulses', el).innerHTML = hpulse; lastActiveKey = key; }
+    if (!a) { $('#pulses', el).innerHTML = ''; $('#h-pulses', el).innerHTML = ''; }
+    renderTriage(run, a);
+    renderClash(run, a);
     const dimAll = run.status === 'idle';
     el.querySelectorAll('.orch-svg .node').forEach(n => n.classList.toggle('dim', dimAll));
+  }
+
+  /** THE CLASH: Loop A would overload. Shows the moment it is detected and how the orchestration reacts, step by step. */
+  function renderClash(run, a) {
+    const c = clashState(run), box = $('#clash', el), svg = $('.orch-svg', el);
+    const phase = !c ? '' : c.resolved ? 'resolved' : 'open';
+    svg.classList.toggle('clash-open', phase === 'open'); svg.classList.toggle('clash-resolved', phase === 'resolved');
+    $('#n-cooling', el)?.classList.toggle('clash', phase === 'open');
+    $('#n-bms', el)?.classList.toggle('clash', phase === 'open' && a?.kind === 'mcp' && run.mcpCalls.at(-1)?.tool === 'calculateCoolingHeadroom');
+    $('#clash-arc-t', el).textContent = phase === 'resolved' ? `RESOLVED · +${c.after.toFixed(1)} kW` : c ? `CLASH · −${Math.abs(c.before).toFixed(1)} kW` : '';
+    $('#gauge', el).classList.toggle('alarm', phase === 'open');
+    if (!c) { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false; box.className = `clash ${phase}`;
+    const steps = c.steps.map((st, i) => `<li class="${i < c.at ? 'done' : i === c.at ? 'now' : ''}"><i>${i + 1}</i><span><b>${esc(st.t)}</b><small>${esc(st.d)}</small></span></li>`).join('');
+    const key = `${phase}|${c.at}`;
+    if (box.dataset.key === key) return; box.dataset.key = key;
+    box.innerHTML = `<div class="clash-head"><span class="clash-mark">${phase === 'resolved' ? icon('check', 16) : icon('alert', 16)}</span>
+      <div><b>${phase === 'resolved' ? `Resolved — Loop ${c.loop} fits R-17 with +${c.after.toFixed(1)} kW` : `Clash — Loop ${c.loop} would overload: −${Math.abs(c.before).toFixed(1)} kW`}</b>
+      <small>${phase === 'resolved' ? 'Same deterministic check, re-run by Cooling after the approved change. No rule was relaxed.' : `Deployment says proceed (space and power are free) · Cooling says not as-is (${c.p95} kW heat + ${c.target} kW target > ${c.cap} kW)`}</small></div>
+      <span class="clash-kw">${phase === 'resolved' ? `+${c.after.toFixed(1)}` : `−${Math.abs(c.before).toFixed(1)}`}<em>kW</em></span></div>
+      <ol class="clash-steps">${steps}</ol>`;
+  }
+
+  /** SYSTEM 1 triage: which path the gate chose, and what it means for System 2 (engaged, or bypassed). */
+  function renderTriage(run, a) {
+    const s1 = run.system1, path = s1?.gate.path, deciding = a?.kind === 'decide';
+    const svg = $('.orch-svg', el);
+    svg.classList.toggle('path-fast', path === 'BOUNDED_ACTION');
+    svg.classList.toggle('path-s2', path === 'SYSTEM_2' && run.requestKind === 'complex');
+    svg.classList.toggle('path-review', !!path && !(path === 'BOUNDED_ACTION' || (path === 'SYSTEM_2' && run.requestKind === 'complex')));
+    const set = (id, txt) => { const n = $(`#m-${id}`, el); if (n) n.textContent = txt; };
+    const cls = (id, on, c) => $(`#n-${id}`, el)?.classList.toggle(c, on);
+    cls('s1', deciding, 'active'); cls('s1', !!s1 && !deciding, 'done');
+    cls('gate', !!s1, 'done'); cls('gate', !!s1 && s1.gate.escalate, 'esc');
+    cls('fast', path === 'BOUNDED_ACTION', 'taken'); cls('fast', !!path && path !== 'BOUNDED_ACTION', 'nottaken');
+    set('s1', !s1 ? (deciding ? 'inferring…' : run.grooming.done ? 'ready' : 'waits for groomed evidence') : `${(s1.runtime?.backend ?? '').toUpperCase()} · ${s1.inferenceMs.toFixed(2)} ms · €0`);
+    set('gate', !s1 ? 'act alone only if ≥ 75 % sure' : path === 'BOUNDED_ACTION' ? `→ fast path · weakest ${Math.round(s1.gate.weakest.confidence * 100)} %` : path === 'HUMAN_REVIEW' ? '→ a person' : `→ escalate · ${s1.gate.reasons.length} reason${s1.gate.reasons.length > 1 ? 's' : ''}`);
+    set('fast', !path ? 'no reasoning model' : path === 'BOUNDED_ACTION' ? `${run.mcpCalls.some(c => c.tool === 'reserveRackSlot') ? 'slot reserved' : 'one governed skill'} · 0 model calls` : 'not taken');
+    const eds = { 'e-tri-s1-gate': !!s1, 'e-tri-gate-fast': path === 'BOUNDED_ACTION', 'e-tri-fast-dep': path === 'BOUNDED_ACTION', 'e-tri-gate-s2': !!path && path !== 'BOUNDED_ACTION' };
+    for (const [id, on] of Object.entries(eds)) { const e = $(`#${id}`, el); e?.classList.toggle('taken', on); e?.classList.toggle('nottaken', !!path && !on); }
+    $('#e-tri-s1-gate', el)?.classList.toggle('active', deciding);
+    // System 2: engaged with the agents System 1 selected, or bypassed
+    const sel = s1?.decisions.agents_required, engaged = path === 'SYSTEM_2' && run.requestKind === 'complex';
+    for (const ag of sc.agents.filter(x => x.id !== 'orchestrator')) {
+      const t = $(`#t-${ag.id}`, el), n = $(`#n-${ag.id}`, el); if (!t || !n) continue;
+      const p = sel?.probabilities[ag.id.toUpperCase()] ?? null, chosen = !!sel && sel.selected.includes(ag.id.toUpperCase());
+      const skillOnly = path === 'BOUNDED_ACTION' && ag.id === 'deployment';
+      t.textContent = !s1 ? '' : engaged ? (chosen ? `S1 selected · ${Math.round(p * 100)} %` : 'not selected') : skillOnly ? 'skill only · no reasoning' : 'not engaged';
+      t.setAttribute('class', `tri-tag ${engaged && chosen ? 'sel' : skillOnly ? 'skill' : s1 ? 'off' : ''}`);
+      n.classList.toggle('bypassed', !!path && !engaged && !skillOnly);
+      n.classList.toggle('skill-only', skillOnly);
+    }
+    $('#n-orchestrator', el)?.classList.toggle('bypassed', !!path && !engaged);
+    const bn = $('#s2-banner', el); bn.classList.toggle('on', !!path && !engaged);
+    if (path && !engaged) { $('#s2-banner-1', el).textContent = 'SYSTEM 2 NOT ENGAGED'; $('#s2-banner-2', el).textContent = path === 'BOUNDED_ACTION' ? 'fast path · 0 model calls' : 'escalated to a person · 0 model calls'; }
   }
 
   function renderNow(run, metrics) {
@@ -249,7 +390,8 @@ export function mountDemo(el, app) {
     let body = '';
     if (ev.kind === 'mcp') {
       const c = run.mcpCalls.find(x => x.id === ev.ref.mcpCall);
-      body = head() + `<div class="now-grid"><div><small>Tool</small><span class="mono">${esc(c.tool)}</span></div><div class="wide"><small>Input</small><span class="mono">${esc(Object.entries(c.args).map(([k, v]) => `${k} = ${Array.isArray(v) ? `[${v.length}]` : v}`).join(', '))}</span></div><div><small>Latency · payload</small><span>${ms(c.latencyMs)} · ${bytes(c.payloadBytes)}</span></div><div class="full"><small>Result</small><span class="result">${esc(c.summary)}</span></div></div>`;
+      const ag = sc.agents.find(a => a.id === c.agent);
+      body = head() + `<div class="now-grid"><div><small>Skill · ${esc(ag?.companion ?? '')} ${esc(ag?.competence.split(' · ')[0] ?? '')}</small><span>${esc(skillName(c.tool))}</span><span class="mono small muted">via MCP · ${esc(c.tool)}</span></div><div class="wide"><small>Input</small><span class="mono">${esc(Object.entries(c.args).map(([k, v]) => `${k} = ${Array.isArray(v) ? `[${v.length}]` : v}`).join(', '))}</span></div><div><small>Latency · payload</small><span>${ms(c.latencyMs)} · ${bytes(c.payloadBytes)}</span></div><div class="full"><small>Result${sc.scienceTools?.includes(c.tool) ? ' · <span class="tag ok sg">science-grounded · computed, not generated</span>' : ''}</small><span class="result">${esc(c.summary)}</span></div></div>`;
     } else if (ev.kind === 'a2a') {
       const m = run.a2aMessages.find(x => x.id === ev.ref.message);
       body = head(`<span class="tag a2a">${esc(m.intent)}</span>`) + `<p class="now-message">“${esc(m.text)}”</p><div class="now-grid"><div><small>Payload</small><span>${m.tokens} tokens · ${Object.keys(m.data).length} fields</span></div><div class="wide"><small>Data</small><span class="mono">${esc(Object.keys(m.data).join(' · '))}</span></div><div><small>Transport</small><span>${ms(m.latencyMs)}</span></div></div>`;
@@ -259,6 +401,13 @@ export function mountDemo(el, app) {
     } else if (ev.kind === 'groom') {
       const s = run.grooming.stages.find(x => x.id === ev.ref.stage);
       body = head() + `<div class="now-grid"><div class="full"><small>Operation</small><span>${esc(s.operation)}</span></div><div><small>Records</small><span>${int(s.recordsIn)} → ${int(s.recordsOut)}</span></div><div><small>Size</small><span>${bytes(s.bytesIn)} → ${bytes(s.bytesOut)}</span></div><div><small>Kept</small><span>${pct(s.recordsOut / s.recordsIn)}</span></div><div><small>CPU (measured)</small><span>${s.cpuMs.toFixed(1)} ms</span></div></div>`;
+    } else if (ev.kind === 'human') {
+      const x = run.humanActions.find(h => h.id === ev.ref.human);
+      const TYPE = { assign: 'assigns', 'approval-request': 'asks for approval', coordinate: 'coordinates', approve: 'approves', 'sign-off': 'signs off' };
+      body = head(`<span class="tag human">${esc(TYPE[x.type] ?? x.type)}</span>`) + `<p class="now-message">“${esc(x.text)}”</p><div class="now-grid"><div><small>Between</small><span>${esc(kindOf(sc, x.from))} → ${esc(kindOf(sc, x.to))}</span></div><div><small>Human time</small><span>${x.minutes ? `${x.minutes} min` : 'request'}</span></div><div class="wide"><small>Why a person</small><span>${x.type === 'coordinate' ? 'People keep coordinating with people.' : x.type === 'approval-request' ? 'Agents recommend; accountable people approve.' : 'Accountability stays with people.'}</span></div></div>`;
+    } else if (ev.kind === 'decide') {
+      const s1 = run.system1, d = s1.decisions;
+      body = head(`<span class="tag ${s1.gate.escalate ? 'a2a' : 'ok'}">${s1.gate.path === 'BOUNDED_ACTION' ? 'bounded action' : s1.gate.path === 'HUMAN_REVIEW' ? 'to a person' : 'escalate · System 2'}</span>`) + `<div class="now-grid"><div><small>Capacity risk</small><span class="mono">${d.capacity_risk.label} · ${pct(d.capacity_risk.confidence)}</span></div><div><small>Reasoning required</small><span class="mono">${d.reasoning_required.label} · ${pct(d.reasoning_required.confidence)}</span></div><div><small>Route</small><span class="mono">${d.preferred_route.label} · ${pct(d.preferred_route.confidence)}</span></div><div><small>Runtime · inference</small><span>${esc(s1.runtime?.backend ?? '')} · ${s1.inferenceMs.toFixed(2)} ms · no network call</span></div></div>`;
     } else if (ev.kind === 'decision') {
       body = head() + `<p class="now-message">${esc(run.recommendation?.decision ?? '')}</p><div class="now-grid"><div><small>Simulated time</small><span>${ms(run.simTimeMs)}</span></div><div><small>AI execution cost</small><span>${eur(metrics.totals.totalCost, { precise: true })}</span></div><div class="wide"><small>Next</small><span><button class="btn sm" data-go="economics">Was it worth it? ${icon('arrow', 13)}</button></span></div></div>`;
     } else {
@@ -277,15 +426,60 @@ export function mountDemo(el, app) {
         <div class="kpi"><small>Input tokens</small><b>${int(t.inputTokens)}</b></div>
         <div class="kpi"><small>Cached tokens</small><b>${int(t.cachedTokens)}</b></div>
         <div class="kpi"><small>Output tokens</small><b>${int(t.outputTokens)}</b></div>
-        <div class="kpi"><small>Model calls</small><b>${t.modelCalls}</b></div>
+        <div class="kpi s1"><small>System 1 decisions</small><b>${metrics.system1 ? `${metrics.system1.decisions} · ${metrics.system1.inferenceMs.toFixed(1)} ms` : '—'}</b></div>
+        <div class="kpi"><small>System 2 · model calls</small><b>${t.modelCalls}</b></div>
         <div class="kpi mcp"><small>MCP calls</small><b>${t.mcpCalls}</b></div>
         <div class="kpi a2a"><small>A2A messages</small><b>${t.a2aMessages}</b></div>
         <div class="kpi"><small>Simulated latency</small><b>${ms(t.latencyMs)}</b></div>
         <div class="kpi"><small>Energy (indicative)</small><b>${t.energyWh.toFixed(2)} Wh</b></div>
+        <div class="kpi human"><small>People involved</small><b>${t.humansInvolved}</b></div>
+        <div class="kpi human"><small>Human time</small><b>${t.humanMinutes} min</b></div>
       </div>
       <div class="agent-meter">${metrics.agents.map(a => `<div class="am-row"><b>${esc(a.name)}</b><span>${eur(a.modelCost, { precise: true })}</span><div class="stack"><i class="c" style="width:${a.cachedTokens / maxTok * 100}%"></i><i class="in" style="width:${a.inputTokens / maxTok * 100}%"></i><i class="out" style="width:${a.outputTokens / maxTok * 100}%"></i></div><em>${int(a.inputTokens + a.cachedTokens)} in · ${int(a.outputTokens)} out · ${a.mcpCalls} MCP · ${a.a2aSent} A2A sent</em></div>`).join('')}</div>
       <div class="stack-legend"><span><i style="background:#c9d6e0"></i>cached</span><span><i style="background:var(--mcp-2)"></i>input</span><span><i style="background:var(--a2a-2)"></i>output</span></div>
       <p class="telemetry-foot">Every figure is derived from one run model. Simulated adapters estimate tokens from the actual context (≈4 bytes/token); real adapters would report provider usage.</p>`;
+  }
+
+  function renderLoop(run) {
+    const box = $('#loop', el), L = sc.loop;
+    if (!L) { box.innerHTML = ''; return; }
+    if (run.requestKind === 'simple') { box.innerHTML = run.system1 ? `<section class="panel loop-panel"><div class="panel-title"><span class="eyebrow">${icon('loop', 14)} Loop engineering</span><span class="tag ok">not needed</span></div><p class="loop-note">System 1 handled this bounded decision with enough confidence. No reasoning loop, no agent collaboration, no model call — one governed skill executed the reservation and the accountable person was informed.</p></section>` : ''; return; }
+    // Split the run into loop iterations: each iteration ends when the agent evaluating the verification tool has reasoned on its result.
+    const iters = [];
+    let cur = null, pendingVerify = null, started = false;
+    for (const e of run.events) {
+      if (e.kind === 'model' || e.kind === 'mcp' || e.kind === 'a2a' || e.kind === 'human') {
+        if (e.kind === 'model') started = true;
+        if (!cur) { if (!started) continue; cur = { calls: [], humans: [], verify: null, closed: false }; iters.push(cur); }
+      }
+      if (!cur) continue;
+      if (e.kind === 'model') { const c = run.modelCalls.find(x => x.id === e.ref.modelCall); cur.calls.push(c); if (pendingVerify && c.agent === pendingVerify.agent) { cur.closed = true; pendingVerify = null; cur = null; } }
+      else if (e.kind === 'mcp') { const c = run.mcpCalls.find(x => x.id === e.ref.mcpCall); if (c.tool === L.verifyTool) { cur.verify = c; pendingVerify = c; } }
+      else if (e.kind === 'human') cur.humans.push(run.humanActions.find(h => h.id === e.ref.human));
+    }
+    // Only keep iterations that reached (or are working towards) a verification; a trailing segment after acceptance is the decision, not the loop.
+    const loopIters = iters.filter((it, i) => it.verify || (i === iters.length - 1 && !iters.some(x => x.verify?.data?.criterionMet)));
+    const accepted = loopIters.find(it => it.verify?.data?.criterionMet && it.closed);
+    const phase = (on, done, lbl, txt) => `<li class="${done ? 'done' : on ? 'on' : ''}"><b>${lbl}</b><span>${txt}</span></li>`;
+    const cards = [];
+    for (let i = 0; i < L.maxIterations; i++) {
+      const it = loopIters[i];
+      if (!it) { cards.push(`<div class="loop-iter idle"><div class="li-head"><span class="li-n">${i + 1}</span><b>Iteration ${i + 1}</b></div><p class="small muted">${accepted ? 'Not needed — the acceptance test already passed.' : run.status === 'idle' ? 'Waiting for the run.' : 'Budgeted, not started.'}</p></div>`); continue; }
+      const v = it.verify?.data, cost = it.calls.reduce((a, c) => a + metricsCost(c, sc), 0), tok = it.calls.reduce((a, c) => a + c.cachedTokens + c.inputTokens + c.outputTokens, 0);
+      const approvals = it.humans.filter(h => h.type === 'approve');
+      const act = i === 0 ? `Measure p95 loop heat${v ? ` · ${v.p95HeatKw} kW` : ''}` : `${v?.releasedKw ? `Release ${v.releasedKw} kW` : 'Apply the correction'}${approvals.length ? ` · approved by ${approvals.map(h => kindOf(sc, h.from)).join(', ')}` : ''}`;
+      const verdict = !v ? '' : v.criterionMet ? `Met → stop` : `Short by ${Math.abs(v.headroomKw)} kW → correct`;
+      cards.push(`<div class="loop-iter ${v ? (v.criterionMet ? 'ok' : 'bad') : 'on'}"><div class="li-head"><span class="li-n">${i + 1}</span><b>Iteration ${i + 1}</b>${v ? `<span class="tag ${v.criterionMet ? 'ok' : 'bad'}">${verdict}</span>` : '<span class="tag neutral">running</span>'}</div>
+        <ol class="li-phases">${phase(true, true, 'Plan', i === 0 ? 'Split the goal across the specialist agents' : 'Find load that can be released')}${phase(true, !!v, 'Act', esc(act))}${phase(!!it.verify, !!v, 'Verify', v ? `<span class="tag ok sg">science-grounded</span> <span class="mono">${esc(v.formula)} = ${v.headroomKw > 0 ? '+' : ''}${v.headroomKw} kW</span>` : `${esc(L.verifyTool)}`)}${phase(!!v, it.closed, 'Decide', v ? (v.criterionMet ? 'Acceptance test passed' : 'Loop again with a correction') : '…')}</ol>
+        <div class="li-foot"><span>${it.calls.length} model call${it.calls.length === 1 ? '' : 's'} · ${int(tok)} tok</span><b>${eur(cost, { precise: true })}</b></div></div>`);
+    }
+    const status = accepted ? `<span class="tag ok">${icon('check', 12)} goal reached in ${loopIters.indexOf(accepted) + 1} of ${L.maxIterations} iterations</span>` : run.status === 'idle' ? '<span class="tag neutral">not started</span>' : `<span class="tag a2a">iteration ${Math.max(1, loopIters.length)} of ${L.maxIterations}</span>`;
+    box.innerHTML = `<section class="panel loop-panel" aria-labelledby="loop-title">
+      <div class="panel-title"><span class="eyebrow" id="loop-title">${icon('loop', 14)} Loop engineering · a long-running agent job, made explicit</span>${status}</div>
+      <div class="loop-spec"><div><small>Goal</small><span>${esc(L.goal)}</span></div><div><small>Acceptance test</small><span>${esc(L.acceptance)}</span></div><div><small>Verifier</small><span class="mono">${esc(L.verifyTool)}</span> <span class="muted small">deterministic MCP tool</span></div><div><small>Budget &amp; stop rule</small><span>${esc(L.stopRule)}</span></div></div>
+      <div class="loop-iters">${cards.join('')}</div>
+      <p class="loop-note">The loop is engineered, not improvised: a goal, a test the agents cannot talk their way past, a correction step, a budget and a hand-over to a person. <span class="muted">Working definition — to be aligned with R&amp;D. Next step: graph engineering (several loops composed into a graph).</span></p>
+    </section>`;
   }
 
   function renderRecommendation(run) {
@@ -300,8 +494,10 @@ export function mountDemo(el, app) {
         ${r.items.map(it => `<div class="rec-item"><small>${esc(it.label)}</small><p>${esc(it.text)}</p></div>`).join('')}
         <div class="rec-item"><small>Actions</small><ol>${r.actions.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>
       </div>
+      <p class="sg-line">${icon('shield', 14)} <b>Science-grounded.</b> Every figure behind this decision — loop heat, target, headroom before and after — was computed by deterministic, physics-based tools and verified again after the change. None was generated by a model. <span class="muted">In production: full simulation against the system model (see Engineering).</span></p>
+      ${peopleBlock(sc, run)}
       ${d ? `<div class="disagree"><span class="ic">${icon('alert', 16)}</span><div><b>Disagreement detected · ${esc(d.topic)}</b><div class="pos">${d.positions.map(p => `<span class="chip"><b>${esc(label(sc, p.agent))}</b> ${esc(p.position)}</span>`).join('')}</div><p><b>Resolution:</b> ${esc(d.resolution)}</p></div></div>` : ''}
-      <div class="spine"><div class="spine-words"><span style="--c:var(--mcp)">OPEN.</span><span style="--c:var(--lean)">LEAN.</span><span style="--c:var(--a2a)">ORCHESTRATE.</span><span style="--c:var(--ok)">MEASURE.</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-go="technical">Inspect the trace</button><button class="btn primary" data-go="economics">Was it worth it? ${icon('arrow', 15)}</button></div></div>
+      <div class="spine"><div class="spine-words"><span style="--c:var(--mcp)">OPEN.</span><span style="--c:var(--lean)">LEAN.</span><span style="--c:var(--a2a)">ORCHESTRATE.</span><span style="--c:var(--ok)">MEASURE.</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-go="story">The story: what happened</button><button class="btn" data-go="technical">Inspect the trace</button><button class="btn primary" data-go="economics">Was it worth it? ${icon('arrow', 15)}</button></div></div>
     </section>`;
     box.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => app.go(b.dataset.go)));
   }
@@ -317,8 +513,35 @@ export function mountDemo(el, app) {
   return { update };
 }
 
+const SOURCE_SERVER = { cooling: 'bms', maintenance: 'bms', power: 'power', gpu: 'power', jobs: 'scheduler', dcim: 'dcim', carbon: 'carbon' };
+/** Reads the clash and the orchestration's reaction from the run (nothing scripted in the UI). */
+function clashState(run) {
+  const checks = run.mcpCalls.filter(c => c.tool === 'calculateCoolingHeadroom');
+  if (!checks.length || checks[0].data.headroomKw >= 0) return null;
+  const first = checks[0].data, fix = checks.find(c => c.data.headroomKw >= 0)?.data;
+  const msg = (f, t) => run.a2aMessages.find(m => m.from === f && m.to === t && (f !== 'cooling' || t !== 'orchestrator' || m.data.criterionMet === false));
+  const hum = (f, type) => run.humanActions.find(h => h.from === f && h.type === type);
+  const prop = run.agents.workload?.outputs.at(-1)?.output?.proposal;
+  const steps = [
+    { t: 'Detected', d: `Cooling · BMS check: ${first.headroomKw} kW`, ok: true },
+    { t: 'Cooling objects', d: 'A2A → orchestrator: not as-is', ok: !!msg('cooling', 'orchestrator') },
+    { t: 'Rebalance asked', d: `Cooling → Workload: free ≥ ${Math.abs(first.headroomKw)} kW`, ok: !!msg('cooling', 'workload') },
+    { t: 'Proposal', d: prop ? `${prop.job} → ${prop.toRack} · −${prop.releasedKw} kW` : 'smallest safe change', ok: !!hum('workload', 'approval-request') },
+    { t: 'People approve', d: 'Cluster Ops + Facility', ok: !!hum('clusterops', 'approve') },
+    { t: 'Re-check', d: fix ? `same check → +${fix.headroomKw} kW` : 'same check, re-run', ok: !!fix }
+  ];
+  const at = steps.findIndex(x => !x.ok);
+  return { loop: first.loopId, before: first.headroomKw, after: fix?.headroomKw ?? null, p95: first.p95HeatKw, target: first.targetKw, cap: first.usableCapacityKw, steps, at: at < 0 ? steps.length : at, resolved: !!fix };
+}
 const metricsCost = (c, sc) => modelCost(c, sc.models);
-const label = (sc, id) => sc.agents.find(a => a.id === id)?.name ?? id;
+const kindOf = (sc, id) => sc.humans?.find(h => h.id === id)?.name ?? label(sc, id);
+function peopleBlock(sc, run) {
+  const acts = (run.humanActions ?? []).filter(h => ['approve', 'sign-off'].includes(h.type));
+  if (!acts.length) return '';
+  const coord = (run.humanActions ?? []).filter(h => h.type === 'coordinate').length;
+  return `<div class="people-block"><span class="ic">${icon('person', 16)}</span><div><b>Decided by people · agents prepared the evidence</b><div class="pos">${acts.map(h => `<span class="chip"><b>${esc(kindOf(sc, h.from))}</b> ${esc(h.text)}</span>`).join('')}</div><p>${coord} person-to-person exchange${coord === 1 ? '' : 's'} · ${(run.humanActions ?? []).reduce((a, h) => a + h.minutes, 0)} min of human time in total.</p></div></div>`;
+}
+const label = (sc, id) => sc.agents.find(a => a.id === id)?.name ?? sc.humans?.find(h => h.id === id)?.name ?? id;
 function dot(pathId, color, keyPoints, dur) {
   const kt = keyPoints.split(';').length === 3 ? '0;0.5;1' : '0;1';
   return `<circle r="4.5" class="pulse" fill="${color}" style="color:${color}"><animateMotion dur="${dur}s" repeatCount="indefinite" keyPoints="${keyPoints}" keyTimes="${kt}" calcMode="linear"><mpath href="#${pathId}"/></animateMotion></circle>`;
@@ -356,6 +579,42 @@ export function inspectEvent(app, run, evId) {
     const d = run.discoveries.find(x => x.server === ev.ref.server);
     return app.inspect('MCP · tools/list', d.name, `${time}<h4>Request</h4>${app.json(d.request)}<h4>Response</h4>${app.json(d.response)}`);
   }
+  if (ev.kind === 'human') { const x = run.humanActions.find(h => h.id === ev.ref.human); return app.inspect('People in the loop', ev.title, `${time}<p>“${esc(x.text)}”</p>${app.json(x)}`); }
   if (ev.kind === 'decision') return app.inspect('Decision', 'Recommendation', `${time}${app.json(run.recommendation)}`);
+  if (ev.kind === 'decide') return inspectSystem1(app, run);
   return app.inspect('Event', ev.title, `${time}${app.json(ev)}`);
+}
+
+
+// ---------- SYSTEM 1 band: compact, parallel, typed ----------
+const DEC_LABEL = { capacity_risk: 'CAPACITY RISK', reasoning_required: 'REASONING REQUIRED', preferred_route: 'ROUTE', agents_required: 'AGENTS REQUIRED' };
+const tone = (id, v) => id === 'capacity_risk' ? ({ LOW: 'ok', MEDIUM: 'warn', HIGH: 'bad' })[v] : id === 'reasoning_required' ? (v === 'YES' ? 'a2a' : 'ok') : id === 'preferred_route' ? ({ DIRECT: 'ok', ORCHESTRATE: 'a2a', HUMAN_REVIEW: 'human' })[v] : 'mcp';
+export function system1Markup(run, app) {
+  const s1 = run.system1, rt = s1?.runtime ?? app.system1Info?.();
+  const pending = !s1;
+  const rtLine = rt ? `<span class="s1-rt ${rt.fallback ? 'fb' : ''}"><i></i>${esc(rt.runtime ?? rt.backend)}${rt.fallback ? ' · labelled fallback' : ''}</span>` : '<span class="s1-rt"><i></i>runtime loading…</span>';
+  const tile = id => {
+    const d = s1?.decisions[id];
+    if (!d) return `<div class="s1-tile pending"><small>${DEC_LABEL[id]}</small><b>—</b><div class="s1-bars"></div></div>`;
+    const bars = Object.entries(d.probabilities).map(([k, p]) => `<div class="s1-bar ${d.type === 'multi' ? (p >= 0.5 ? 'sel' : '') : (k === d.label ? 'sel' : '')}"><span>${esc(k.replace('_', ' '))}</span><i style="width:${Math.max(1, p * 100)}%"></i><em>${Math.round(p * 100)}</em></div>`).join('');
+    const value = d.type === 'multi' ? (d.selected.length ? `${d.selected.length} of 4` : 'NONE') : d.label.replace('_', ' ');
+    return `<div class="s1-tile ${tone(id, d.type === 'multi' ? '' : d.label)}"><small>${DEC_LABEL[id]}</small><b>${esc(value)}</b><div class="s1-bars">${bars}</div></div>`;
+  };
+  const g = s1?.gate;
+  const gateTile = !g ? `<div class="s1-gate pending"><small>CONFIDENCE GATE</small><b>—</b><p>Waits for the typed decisions.</p></div>`
+    : `<div class="s1-gate ${g.escalate ? 'esc' : 'ok'}"><small>CONFIDENCE GATE · ≥ ${Math.round(g.threshold * 100)} %</small><b>${g.path === 'BOUNDED_ACTION' ? 'ACT · bounded' : g.path === 'HUMAN_REVIEW' ? 'ESCALATE · person' : 'ESCALATE · System 2'}</b><p>${g.escalate ? `Why: ${esc(g.reasons.join(' · '))}` : `Route DIRECT, no reasoning required, weakest decision ${Math.round(g.weakest.confidence * 100)} %.`}</p></div>`;
+  return `<div class="s1-head"><span class="eyebrow" id="s1-title"><b class="s1-mark">S1</b> TRIAGE · System 1 · a small model decides whether System 2 is needed</span>${rtLine}${s1 ? `<span class="s1-ms">${s1.inferenceMs.toFixed(2)} ms · €0 · no network call</span><button class="btn sm ghost" data-s1-inspect>Inspect ${icon('eye', 13)}</button>` : ''}</div>
+    <div class="s1-row ${pending ? 'is-pending' : ''}">${['capacity_risk', 'reasoning_required', 'preferred_route', 'agents_required'].map(tile).join('')}<span class="s1-arrow">→</span>${gateTile}</div>`;
+}
+export function inspectSystem1(app, run) {
+  const s1 = run.system1; if (!s1) return;
+  const { FEATURES } = app.system1Features;
+  const rows = FEATURES.map(f => `<tr><td>${esc(f.label)}</td><td class="mono">${s1.features.named[f.id]}</td><td class="small muted">${esc(f.formula)}</td></tr>`).join('');
+  return app.inspect('SYSTEM 1 · decision model', `${run.incident.rack} · ${s1.gate.path.replace('_', ' ').toLowerCase()}`,
+    `<p>Nine features, computed deterministically from the groomed evidence, are fed to a ${app.modelCard.parameters.toLocaleString('en-US')}-parameter model (${(app.modelCard.onnx.bytes / 1024).toFixed(1)} KB ONNX). It returns four typed decisions with probabilities; the confidence gate decides whether System 1 may act or must escalate.</p>
+    <h4>Runtime</h4>${app.json(s1.runtime)}
+    <h4>Features (from ${run.grooming.evidence?.records ?? '—'} groomed records)</h4><div class="table-wrap"><table class="data"><thead><tr><th>Feature</th><th>Value</th><th>Definition</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <h4>Typed decisions</h4>${app.json(s1.decisions)}
+    <h4>Gate</h4>${app.json(s1.gate)}
+    <h4>Training (model card)</h4>${app.json({ architecture: app.modelCard.architecture, training: app.modelCard.training, holdout: app.modelCard.holdout })}`);
 }
