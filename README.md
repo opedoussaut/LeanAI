@@ -110,6 +110,23 @@ Loop A v2 are evaluated under identical conditions; the evidence comes back to a
 * Film: `media/LeanAI-cinematic-cooling-loop-mbse.mp4` (104 s) — why each diagram exists, who creates it and what it shows. Page captures: `docs/captures/cooling-loop-mbse/`.
 * Honest boundaries: SysML v1 (no SysML v2 plugin installed); the calculation runs in LeanAI (no Cameo Simulation Toolkit) and is labelled as such.
 
+## Industrial Recovery — a second scenario (NovaRail, Google agentic stack)
+
+The same decision architecture in another industry and on another AI stack: a fictional rail manufacturer receives a
+supplier notice — **18 traction inverter modules, 8 days late, 3 trainsets affected**. Header switch **Industrial recovery**
+(`#recovery`).
+
+**REDUCE → DECIDE → REASON → VALIDATE → ACT → ENGINEER.** 18,407 synthetic enterprise records → 76 evidence items; a
+1,065-parameter decision model routes the case to four specialists (supply, planning, cost + risk, configuration) over A2A,
+grounded in six simulated enterprise systems over MCP; deterministic validation; €420,086 of exposure, €31,010 of recovery
+cost, €389,076 of value protected by the proposed plan, for about €0.06 of AI — then a configuration conflict stops the plan
+for an engineering review, and a person approves.
+
+* Simulated by default (no key, no model called, labelled); live with Gemini through Google ADK when you run
+  `GEMINI_API_KEY=… npm run start:live` locally (optional dependencies; never on Pages).
+* Film: `media/leanai-industrial-recovery-75s.mp4` (`npm run film`, `npm run film:preview`), generated from the same data.
+* Details: [`docs/INDUSTRIAL-RECOVERY.md`](docs/INDUSTRIAL-RECOVERY.md) · timing and voiceover: [`docs/film-timing.md`](docs/film-timing.md).
+
 ## Protocol Lab (previous workshop, preserved)
 
 `lab.html` keeps the original two-tab cooling-capacity workshop (Rack Deployment Planner ↔ Liquid Cooling Engineer) with live JSON-RPC over HTTP when served by `npm start`. It is linked from the page footer. Presenter script: [PROTOCOL-LAB-PRESENTER.md](PROTOCOL-LAB-PRESENTER.md).

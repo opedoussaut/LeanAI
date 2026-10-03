@@ -35,7 +35,12 @@ export function mountRail(el, app) {
       try {
         const st = await (await fetch('http://127.0.0.1:18800/rail/status', { signal: AbortSignal.timeout(2500) })).json();
         ui.live = { status: st };
-      } catch { ui.live = { error: 'The live endpoint (npm run start:live) is not answering on 127.0.0.1:18800 — showing the SIMULATED run.' }; }
+        const live = await (await fetch('http://127.0.0.1:18800/rail/run', { signal: AbortSignal.timeout(180000) })).json();
+        if (live.error) throw new Error(live.error);
+        // The specialists, their tool calls and token usage come from the live run; validation, economics and governance
+        // are the same deterministic code, executed here on the same evidence.
+        ui.run = { ...ui.run, specialists: live.specialists, toolCalls: live.toolCalls, modelCalls: live.modelCalls, messages: live.messages, events: live.events, telemetry: live.telemetry, provider: live.provider, agreement: live.agreement };
+      } catch { ui.live = { error: 'The live endpoint (npm run start:live) did not complete a run on 127.0.0.1:18800 — showing the SIMULATED run.' }; }
     }
     render();
   }

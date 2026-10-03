@@ -1,0 +1,301 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>LeanAI · Industrial Recovery — film</title>
+<style>
+@font-face { font-family: Inter; font-weight: 200; src: url(inter-latin-200-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 300; src: url(inter-latin-300-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 400; src: url(inter-latin-400-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 600; src: url(inter-latin-600-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 700; src: url(inter-latin-700-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 800; src: url(inter-latin-800-normal.woff2); }
+html, body { margin: 0; background: #05080d; height: 100%; }
+body { display: grid; place-items: center; }
+canvas { display: block; width: min(100vw, 177.78vh); height: auto; }
+#bar { position: fixed; left: 0; bottom: 0; height: 3px; background: #d08a4a; }
+</style></head>
+<body><canvas id="c" width="1920" height="1080"></canvas><div id="bar"></div>
+<script type="module">
+// LeanAI — Industrial Recovery film (1920×1080, ~82 s). Deterministic: render(t) draws the frame at t seconds.
+// Every figure comes from railStory() (src/scenarios/rail/facts.js) through filmFacts() — the same source as the page.
+// All visuals are original drawings. NovaRail is fictional. Optional footage slots are marked FOOTAGE-SLOT.
+import { railStory } from '../src/scenarios/rail/facts.js';
+import { filmFacts, SCENES as SC, DURATION } from '../src/scenarios/rail/film.js';
+
+const W = 1920, H = 1080, cv = document.getElementById('c'), g = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const eio = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const eout = k => 1 - Math.pow(1 - k, 3);
+const fade = (t, a, b, c, d) => Math.min(eio(seg(t, a, b)), 1 - eio(seg(t, c, d)));
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let x = Math.imul(seed ^ seed >>> 15, 1 | seed); x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x; return ((x ^ x >>> 14) >>> 0) / 4294967296; }; }
+const C = { steel: [150, 175, 200], copper: [214, 142, 78], amber: [240, 176, 74], red: [255, 96, 92], green: [64, 216, 160], violet: [164, 135, 255], blue: [74, 168, 255], cyan: [70, 205, 230], white: [238, 244, 250], grey: [124, 144, 164], dim: [70, 86, 104] };
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+function text(s, x, y, { size = 48, weight = 600, color = C.white, a = 1, align = 'center', track = 0, base = 'middle' } = {}) {
+  if (a <= .003) return; g.font = `${weight} ${size}px Inter`; g.textAlign = align; g.textBaseline = base; g.letterSpacing = `${track}px`; g.fillStyle = rgba(color, Math.min(1, a)); g.fillText(s, x, y); g.letterSpacing = '0px';
+}
+const tw = (s, size, weight, track = 0) => { g.font = `${weight} ${size}px Inter`; g.letterSpacing = `${track}px`; const w = g.measureText(s).width; g.letterSpacing = '0px'; return w; };
+function line(x1, y1, x2, y2, c, a, w = 1.5, dash) { if (a <= .003) return; g.strokeStyle = rgba(c, a); g.lineWidth = w; g.setLineDash(dash ?? []); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); g.setLineDash([]); }
+function rr(x, y, w, h, r, fill, stroke, lw = 1.5) { g.beginPath(); g.roundRect(x, y, w, h, r); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); } }
+function glow(x, y, r, c, a) { if (a <= .003) return; const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, rgba(c, a)); gr.addColorStop(1, rgba(c, 0)); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r); }
+const add = () => (g.globalCompositeOperation = 'lighter'), norm = () => (g.globalCompositeOperation = 'source-over');
+
+// ---------- the physical world: assembly hall and the NovaRail trainset (original drawings) ----------
+function hall(t, a = 1, warm = 0) {
+  g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+  const sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, `rgba(${18 + warm * 10},${26 + warm * 4},${40},${a})`); sky.addColorStop(.62, `rgba(8,12,19,${a})`); sky.addColorStop(1, `rgba(4,6,10,${a})`);
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  // roof trusses
+  for (let i = 0; i < 9; i++) { const x = 120 + i * 210; line(x, 0, x + 40, 250, C.steel, .07 * a, 2); line(x, 0, x - 40, 250, C.steel, .05 * a, 2); }
+  line(0, 250, W, 250, C.steel, .09 * a, 3);
+  // overhead lights
+  add(); for (let i = 0; i < 8; i++) { const x = 220 + i * 220; glow(x, 270, 150, [255, 225, 180], .06 * a); rr(x - 40, 262, 80, 6, 3, rgba([255, 236, 210], .55 * a)); } norm();
+  // floor in perspective
+  const hz = 640;
+  const fl = g.createLinearGradient(0, hz, 0, H); fl.addColorStop(0, `rgba(20,27,38,${a})`); fl.addColorStop(1, `rgba(8,11,16,${a})`); g.fillStyle = fl; g.fillRect(0, hz, W, H - hz);
+  for (let i = -18; i <= 18; i++) line(W / 2 + i * 60, hz, W / 2 + i * 260, H, C.steel, .05 * a, 1);
+  for (let k = 0; k < 10; k++) { const z = (k + 1) / 10, y = hz + Math.pow(z, 2.2) * (H - hz); line(0, y, W, y, C.steel, .05 * a * z, 1); }
+  // rails
+  line(0, 664, W, 664, C.copper, .4 * a, 2); line(0, 680, W, 680, C.copper, .28 * a, 2);
+  // workstations and an overhead crane (FOOTAGE-SLOT: a real assembly-hall plate can replace this background)
+  for (let i = 0; i < 7; i++) { const x = 180 + i * 260; rr(x - 70, 690, 140, 18, 4, rgba([40, 52, 66], .8 * a)); line(x - 60, 708, x - 60, 760, C.steel, .12 * a, 3); line(x + 60, 708, x + 60, 760, C.steel, .12 * a, 3); }
+  line(0, 360, W, 360, C.steel, .12 * a, 6); rr(900 + Math.sin(t * .3) * 200, 352, 120, 22, 4, rgba([214, 142, 78], .5 * a)); line(960 + Math.sin(t * .3) * 200, 374, 960 + Math.sin(t * .3) * 200, 470, C.steel, .25 * a, 2);
+}
+function stationMarks(a, labels = true) {
+  const names = ['S10', 'S20', 'S30', 'S40', 'S50', 'S60', 'S70'];
+  names.forEach((s, i) => { const x = 180 + i * 260; line(x, 300, x, 640, C.steel, .1 * a, 1, [4, 6]); if (labels) text(s, x, 320, { size: 15, weight: 600, color: C.grey, a: .7 * a, track: 3 }); });
+}
+function worker(x, y, s, a, lift = 0) {
+  g.fillStyle = rgba([180, 196, 212], .55 * a); g.beginPath(); g.arc(x, y - 58 * s, 8 * s, 0, 6.283); g.fill();
+  rr(x - 9 * s, y - 48 * s, 18 * s, 32 * s, 7 * s, rgba([150, 166, 184], .5 * a));
+  rr(x - 7 * s, y - 18 * s, 6 * s, 20 * s, 3 * s, rgba([120, 136, 154], .5 * a)); rr(x + 1 * s, y - 18 * s, 6 * s, 20 * s, 3 * s, rgba([120, 136, 154], .5 * a));
+  line(x + 8 * s, y - 42 * s, x + 20 * s, y - 52 * s - lift * 8, [150, 166, 184], .5 * a, 4 * s);
+}
+/** NovaRail NR-E trainset in side profile. state colours the roof line (ok / risk / saved / frozen). */
+function train(x, y, s, cars, a = 1, state = 'ok', pan = true) {
+  const carW = 300 * s, h = 92 * s, gap = 8 * s;
+  const tint = { ok: C.steel, risk: C.amber, saved: C.green, frozen: C.red }[state];
+  for (let i = 0; i < cars; i++) {
+    const cx = x + i * (carW + gap), lead = i === 0, tail = i === cars - 1;
+    g.save(); g.globalAlpha = a;
+    const body = g.createLinearGradient(0, y, 0, y + h); body.addColorStop(0, '#dfe6ee'); body.addColorStop(.55, '#b9c6d3'); body.addColorStop(1, '#7d8b99');
+    g.fillStyle = body; g.beginPath();
+    if (lead) { g.moveTo(cx + 70 * s, y); g.lineTo(cx + carW - 6 * s, y); g.quadraticCurveTo(cx + carW, y, cx + carW, y + 8 * s); g.lineTo(cx + carW, y + h); g.lineTo(cx + 14 * s, y + h); g.quadraticCurveTo(cx - 6 * s, y + h * .55, cx + 6 * s, y + h * .32); g.quadraticCurveTo(cx + 22 * s, y + 2 * s, cx + 70 * s, y); }
+    else if (tail) { g.moveTo(cx, y); g.lineTo(cx + carW - 70 * s, y); g.quadraticCurveTo(cx + carW - 22 * s, y + 2 * s, cx + carW - 6 * s, y + h * .32); g.quadraticCurveTo(cx + carW + 6 * s, y + h * .55, cx + carW - 14 * s, y + h); g.lineTo(cx, y + h); g.closePath(); }
+    else g.roundRect(cx, y, carW, h, 6 * s);
+    g.fill();
+    // window band and doors
+    g.fillStyle = '#1b2633'; g.fillRect(cx + (lead ? 80 : 18) * s, y + 22 * s, carW - (lead || tail ? 98 : 36) * s, 26 * s);
+    if (lead) { g.beginPath(); g.moveTo(cx + 30 * s, y + 18 * s); g.lineTo(cx + 74 * s, y + 18 * s); g.lineTo(cx + 74 * s, y + 46 * s); g.lineTo(cx + 14 * s, y + 46 * s); g.closePath(); g.fill(); }
+    g.fillStyle = 'rgba(214,142,78,.85)'; g.fillRect(cx + (lead ? 10 : 0), y + 58 * s, carW - (lead ? 10 : 0), 5 * s);
+    for (const dx of [.28, .72]) { g.fillStyle = '#9aa8b6'; g.fillRect(cx + carW * dx - 13 * s, y + 18 * s, 26 * s, h - 22 * s); g.fillStyle = '#26313e'; g.fillRect(cx + carW * dx - 9 * s, y + 24 * s, 18 * s, 22 * s); }
+    // roof line (state)
+    g.fillStyle = rgba(tint, state === 'ok' ? .35 : .9); g.fillRect(cx + (lead ? 70 : 4) * s, y - 4 * s, carW - (lead || tail ? 74 : 8) * s, 4 * s);
+    if (pan && i === 1) { line(cx + 120 * s, y - 4 * s, cx + 160 * s, y - 34 * s, [60, 70, 80], a, 3 * s); line(cx + 160 * s, y - 34 * s, cx + 130 * s, y - 52 * s, [60, 70, 80], a, 3 * s); line(cx + 112 * s, y - 52 * s, cx + 150 * s, y - 52 * s, [60, 70, 80], a, 3 * s); }
+    // bogies
+    for (const bx of [.18, .82]) { const bxp = cx + carW * bx; rr(bxp - 40 * s, y + h, 80 * s, 12 * s, 4 * s, '#2a333d'); g.fillStyle = '#11161c'; for (const w of [-22, 22]) { g.beginPath(); g.arc(bxp + w * s, y + h + 14 * s, 11 * s, 0, 6.283); g.fill(); } }
+    g.restore();
+  }
+  return x + cars * (carW + gap);
+}
+
+// ---------- data ----------
+const story = await railStory();
+const F = filmFacts(story);
+const R = rng(5);
+const parts = Array.from({ length: 900 }, () => ({ src: Math.floor(R() * 6), r: R(), d: R(), j: R() }));
+const SOURCES = ['ERP', 'MES', 'Inventory', 'Supplier', 'Configuration', 'Planning'];
+
+function caption(s, t, a, b, c, d, y = 1000) { text(s, W / 2, y, { size: 30, weight: 300, color: C.white, a: fade(t, a, b, c, d) * .9 }); }
+function kicker(s, t, a, b, c, d, col = C.copper) { text(s, 120, 110, { size: 16, weight: 700, color: col, a: fade(t, a, b, c, d), align: 'left', track: 6 }); }
+
+// ---------- scenes ----------
+function commitment(t) {
+  hall(t); stationMarks(1);
+  const k = eout(seg(t, 0, 6.5));
+  train(lerp(-1900, 130, k), 575, .75, 6, 1, 'ok');
+  [[300, 1.2], [820, 1.1], [1450, 1.25]].forEach(([x, s], i) => worker(x, 760, s, fade(t, .5 + i * .3, 1.5 + i * .3, 6.4, 7), Math.sin(t * 2 + i)));
+  text('INDUSTRIAL PRODUCTION', W / 2, 160, { size: 26, weight: 600, color: C.grey, a: fade(t, 1, 1.8, 4.2, 4.8), track: 10 });
+  text('RUNS ON COMMITMENTS.', W / 2, 230, { size: 64, weight: 800, a: fade(t, 1.4, 2.3, 4.2, 4.8), track: -1 });
+  text('UNTIL SOMETHING CHANGES.', W / 2, 220, { size: 64, weight: 300, a: fade(t, 4.9, 5.6, 6.6, 7) });
+}
+function disruption(T, t) {
+  hall(t, .55); stationMarks(.5, false);
+  const trains = F.affected;
+  // three affected trainsets in a row, turning amber as the signal propagates
+  trains.forEach((id, i) => { const k = seg(T, 4.6 + i * .25, 5.2 + i * .25); train(220 + i * 560, 640, .26, 6, 1, k > .5 ? 'risk' : 'ok', false); text(id, 220 + i * 560 + 250, 780, { size: 20, weight: 700, color: k > .5 ? C.amber : C.grey, a: seg(T, 1, 2) }); });
+  // propagation chain
+  const nodes = [['Supplier', 260], ['Inventory', 700], ['Production', 1140], ['Delivery', 1580]];
+  nodes.forEach(([n, x], i) => { const k = seg(T, 1.6 + i * .7, 2.2 + i * .7); rr(x - 120, 410, 240, 64, 32, rgba([20, 28, 40], .9 * k), rgba(i === 0 ? C.red : C.amber, .8 * k), 2); text(n, x, 442, { size: 24, weight: 600, a: k }); if (i < 3) { const kk = seg(T, 2 + i * .7, 2.6 + i * .7); line(x + 124, 442, lerp(x + 124, x + 316, kk), 442, C.amber, .8, 2); } });
+  add(); glow(260, 442, 160, C.red, .25 * (.6 + .4 * Math.sin(T * 6)) * seg(T, 1.5, 2)); norm();
+  text(F.component, W / 2, 200, { size: 24, weight: 700, color: C.red, a: fade(T, .3, 1, 7.4, 8), track: 8 });
+  text(F.delayLine, W / 2, 290, { size: 110, weight: 800, a: fade(T, .5, 1.3, 7.4, 8), track: -3 });
+  text(F.componentDetail, W / 2, 360, { size: 22, weight: 400, color: C.grey, a: fade(T, 1, 1.8, 7.4, 8) });
+  text(F.atRisk, W / 2, 900, { size: 46, weight: 700, color: C.amber, a: fade(T, 5.4, 6, 7.4, 8), track: 2 });
+}
+function reduce(T, t) {
+  g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+  kicker('REDUCE', T, .2, .8, 8.4, 9, C.cyan);
+  const cx = W / 2, cy = 520;
+  SOURCES.forEach((s, i) => { const y = 250 + i * 110; text(s, 150, y, { size: 26, weight: 600, color: C.cyan, a: fade(T, .2 + i * .15, .8 + i * .15, 8.4, 9), align: 'left' }); });
+  const collapse = eio(seg(T, 4.2, 5.6));
+  add();
+  for (const p of parts) {
+    const sy = 250 + p.src * 110, flow = (T * (0.35 + p.r * .4) + p.d) % 1, on = seg(T, .3, 1.2) * (1 - seg(T, 5.6, 6.2));
+    let x = lerp(330, cx - 40, flow), y = lerp(sy, cy + (p.j - .5) * 260, eio(flow));
+    x = lerp(x, cx, collapse); y = lerp(y, cy, collapse);
+    if (on > 0) glow(x, y, 6, C.cyan, .5 * on * (1 - collapse * .7));
+  }
+  norm();
+  const count = Math.round(F.rawRecords * eout(seg(T, .6, 4)));
+  text(count.toLocaleString('en-US'), cx + 330, cy - 30, { size: 120, weight: 800, a: fade(T, .6, 1.2, 4.2, 4.8), track: -4 });
+  text('SIGNALS', cx + 330, cy + 50, { size: 26, weight: 600, color: C.grey, a: fade(T, .6, 1.2, 4.2, 4.8), track: 8 });
+  // evidence items appear as a compact grid
+  const n = F.evidenceItems, cols = 19, kE = seg(T, 5.4, 6.4);
+  for (let i = 0; i < n; i++) { const k = seg(T, 5.4 + i * .008, 5.9 + i * .008); const x = cx - (cols * 22) / 2 + (i % cols) * 22, y = cy - 50 + Math.floor(i / cols) * 22; rr(x, y, 16, 16, 4, rgba(C.cyan, .85 * k * (1 - seg(T, 8.4, 9)))); }
+  text(F.evidenceLine, cx, cy + 110, { size: 44, weight: 800, a: fade(T, 5.8, 6.4, 8.4, 9), track: 1 });
+  text(F.reductionLine, cx, cy + 180, { size: 34, weight: 600, color: C.cyan, a: fade(T, 6.4, 7, 8.4, 9), track: 4 });
+  text(F.reductionExact, cx, cy + 228, { size: 18, weight: 400, color: C.grey, a: fade(T, 6.6, 7.2, 8.4, 9) });
+  caption('Reduce before reasoning.', T, 1.4, 2.2, 8.2, 8.9);
+}
+function decide(T, t) {
+  g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+  kicker('DECIDE', T, .2, .8, 6.4, 7, C.violet);
+  text('DO WE NEED GENERATIVE AI?', W / 2, 210, { size: 52, weight: 800, a: fade(T, .2, .9, 6.4, 7), track: 1 });
+  const factors = ['schedule', 'inventory', 'configuration', 'cost', 'risk'];
+  const ix = 620, ox = 1300, hx = [860, 1080];
+  factors.forEach((f, i) => { const y = 360 + i * 80, k = seg(T, .8 + i * .25, 1.3 + i * .25); text(f, ix - 30, y, { size: 26, weight: 500, color: C.white, a: k * (1 - seg(T, 6.4, 7)), align: 'right' }); g.fillStyle = rgba(C.violet, .9 * k); g.beginPath(); g.arc(ix, y, 7, 0, 6.283); g.fill(); });
+  const hidden = [0, 1].map(l => Array.from({ length: 8 }, (_, j) => [hx[l], 340 + j * 48]));
+  const pulse = seg(T, 2, 3.8);
+  for (let i = 0; i < 5; i++) for (const [x, y] of hidden[0]) line(ix, 360 + i * 80, x, y, C.violet, .05 + .1 * pulse, 1);
+  for (const [x1, y1] of hidden[0]) for (const [x2, y2] of hidden[1]) line(x1, y1, x2, y2, C.violet, .04 + .08 * seg(T, 2.6, 4), 1);
+  for (const [x, y] of hidden[1]) line(x, y, ox, 520, C.violet, .05 + .12 * seg(T, 3.2, 4.4), 1);
+  add(); for (const L of hidden) for (const [x, y] of L) glow(x, y, 14, C.violet, .5 * pulse); glow(ox, 520, 90, C.violet, .6 * seg(T, 3.8, 4.4)); norm();
+  text(F.modelLine, W / 2, 790, { size: 20, weight: 400, color: C.grey, a: fade(T, 1.2, 1.8, 6.4, 7) });
+  text(F.verdictPre, W / 2, 870, { size: 26, weight: 600, color: C.grey, a: fade(T, 4.3, 4.9, 6.4, 7), track: 6 });
+  text(F.verdict, W / 2, 930, { size: 54, weight: 800, color: C.violet, a: fade(T, 4.6, 5.2, 6.4, 7), track: 1 });
+  caption('Decide before invoking AI.', T, 1.6, 2.4, 6.2, 6.9, 1020);
+}
+function reason(T, t) {
+  g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+  const k = fade(T, .2, 1, 11.2, 12);
+  const agents = F.specialists.map((n, i) => [1000 + (i % 2) * 520, 300 + Math.floor(i / 2) * 230, n]);
+  const systems = F.systems.map((n, i) => [930 + i * 230, 870, n]);
+  const hub = [1260, 520];
+  // MCP: agent ↔ enterprise system (blue), A2A: agent ↔ agent (violet)
+  agents.forEach(([x, y], i) => systems.forEach(([sx, sy], j) => { if ((i + j) % 2) return; const on = seg(T, 2 + i * .4 + j * .2, 2.6 + i * .4 + j * .2); g.lineDashOffset = -T * 40; line(x, y + 36, sx, sy - 30, C.blue, .35 * on * k, 2, [6, 10]); }));
+  agents.forEach(([x, y], i) => { const on = seg(T, 3 + i * .5, 3.6 + i * .5); line(x, y, hub[0], hub[1], C.violet, .5 * on * k, 2.5); });
+  for (let i = 0; i < 4; i++) { const p = (T * .45 + i * .25) % 1, [x, y] = agents[i]; add(); glow(lerp(x, hub[0], p), lerp(y, hub[1], p), 16, C.violet, .7 * k * seg(T, 3.5, 4.5)); norm(); }
+  agents.forEach(([x, y, n], i) => { const kk = seg(T, .6 + i * .3, 1.2 + i * .3) * k; rr(x - 170, y - 36, 340, 72, 36, rgba([24, 20, 44], .95 * kk), rgba(C.violet, .8 * kk), 2); text(n, x, y, { size: 24, weight: 700, a: kk, track: 2 }); });
+  systems.forEach(([x, y, n], i) => { const kk = seg(T, 1.4 + i * .2, 2 + i * .2) * k; rr(x - 100, y - 30, 200, 60, 12, rgba([12, 26, 44], .95 * kk), rgba(C.blue, .7 * kk), 1.5); text(n, x, y, { size: 21, weight: 600, color: C.white, a: kk }); });
+  add(); glow(hub[0], hub[1], 120, C.copper, .45 * k * seg(T, 6, 7.5)); norm();
+  g.fillStyle = rgba(C.copper, k * seg(T, 6, 7)); g.beginPath(); g.arc(hub[0], hub[1], 18, 0, 6.283); g.fill();
+  text('SPECIALISTS.', 150, 380, { size: 70, weight: 800, a: fade(T, 1, 1.8, 11.2, 12), align: 'left', track: -1 });
+  text('SHARED EVIDENCE.', 150, 470, { size: 70, weight: 800, a: fade(T, 3.6, 4.4, 11.2, 12), align: 'left', track: -1 });
+  text('ONE DECISION.', 150, 560, { size: 70, weight: 800, color: C.copper, a: fade(T, 6.4, 7.2, 11.2, 12), align: 'left', track: -1 });
+  text(F.aiLine, 150, 650, { size: 20, weight: 400, color: C.grey, a: fade(T, 7.5, 8.2, 11.2, 12), align: 'left' });
+  // subordinate technical indicators
+  ['Gemini', 'ADK', 'A2A', 'MCP'].forEach((s, i) => { const x = 150 + i * 120; rr(x, 1000, 104, 34, 17, null, rgba(C.grey, .45 * fade(T, 8, 8.6, 11.2, 12)), 1); text(s, x + 52, 1017, { size: 15, weight: 600, color: C.grey, a: .8 * fade(T, 8, 8.6, 11.2, 12) }); });
+}
+function gantt(T, k, frozen = 0) {
+  // S30 plan over days 0..14 for the affected trainsets; reorganises from 'waiting' to the recovery plan.
+  const x0 = 520, x1 = 1760, y0 = 330, dx = (x1 - x0) / 14, rowH = 140, rows = F.plan;
+  for (let d = 0; d <= 14; d++) { line(x0 + d * dx, y0 - 40, x0 + d * dx, y0 + rows.length * rowH - 30, C.steel, .07 * k, 1); if (d % 2 === 0) text(d === 0 ? 'today' : `+${d}`, x0 + d * dx, y0 - 60, { size: 16, weight: 500, color: C.grey, a: .8 * k }); }
+  const bx = x0 + F.batchDay * dx; line(bx, y0 - 40, bx, y0 + rows.length * rowH - 30, C.red, .6 * k, 2, [8, 8]); text('late batch arrives', bx, y0 + rows.length * rowH - 6, { size: 16, weight: 600, color: C.red, a: .9 * k });
+  const re = eio(seg(T, 1.6, 3.4));
+  rows.forEach((p, i) => {
+    const y = y0 + i * rowH, ts = story.affected.find(a => a.id === p.trainset), s30 = ts.s30Day;
+    const col = frozen && p.trainset === F.conflict?.trainset ? C.red : (re > .5 && p.protected ? C.green : (ts.kitted ? C.steel : C.amber));
+    text(p.trainset, x0 - 40, y + 30, { size: 28, weight: 700, a: k, align: 'right' });
+    text(p.short, x0 - 40, y + 64, { size: 17, weight: 400, color: re > .5 ? C.white : C.grey, a: k * (ts.kitted || re > .3 ? 1 : 0), align: 'right' });
+    let from = s30, to = s30 + 2;
+    if (!ts.kitted && p.kind === 'RESEQUENCE_AND_SLACK') { // harness in the slot, inverters on arrival
+      const wait = lerp(F.batchDay, s30, 0);
+      rr(x0 + from * dx, y + 10, (to - from) * dx - 6, 56, 10, rgba(col, .25 * k), rgba(col, .9 * k), 2);
+      const ax = lerp(x0 + F.batchDay * dx, x0 + F.batchDay * dx, re); rr(ax, y + 10, dx - 6, 56, 10, rgba(col, .25 * k * re), rgba(col, .9 * k * re), 2);
+      line(x0 + to * dx, y + 38, ax, y + 38, col, .5 * k * re, 2, [5, 6]);
+      text('slack', (x0 + to * dx + ax) / 2, y + 26, { size: 15, weight: 500, color: C.grey, a: k * re });
+    } else if (!ts.kitted) {
+      const shift = lerp(F.batchDay - s30, 0, re);
+      rr(x0 + (from + shift) * dx, y + 10, (to - from) * dx - 6, 56, 10, rgba(col, .25 * k), rgba(col, .9 * k), 2);
+      // inventory tokens arriving
+      for (let j = 0; j < 6; j++) { const kk = seg(T, 2 + j * .12, 2.8 + j * .12); add(); glow(lerp(x0 - 300 + j * 30, x0 + from * dx + 20 + j * 22, eio(kk)), lerp(y0 - 140, y + 38, eio(kk)), 12, j < 4 ? C.copper : C.amber, .8 * kk * k * (1 - seg(T, 3.2, 3.6))); norm(); }
+    } else rr(x0 + from * dx, y + 10, (to - from) * dx - 6, 56, 10, rgba(col, .2 * k), rgba(col, .7 * k), 2);
+    // delivery milestone diamond
+    const mx = x1 - 30; g.save(); g.translate(mx, y + 38); g.rotate(Math.PI / 4); g.fillStyle = rgba(re > .6 && p.protected ? C.green : C.amber, .9 * k); g.fillRect(-11, -11, 22, 22); g.restore();
+  });
+  text('delivery', x1 - 30, y0 - 60, { size: 16, weight: 600, color: C.grey, a: .8 * k });
+}
+function recovery(T, t) {
+  g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+  kicker('RECOVERY', T, .2, .8, 7.4, 8, C.green);
+  gantt(T, fade(T, .2, .9, 7.4, 8));
+  text('RECOVERY PLAN FOUND', W / 2, 860, { size: 40, weight: 700, color: C.white, a: fade(T, 3.6, 4.2, 5.6, 6), track: 3 });
+  text('DELIVERY COMMITMENT PROTECTED', W / 2, 860, { size: 52, weight: 800, color: C.green, a: fade(T, 5.8, 6.4, 7.4, 8), track: 2 });
+}
+function value(T, t) {
+  g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+  const k = fade(T, .2, 1, 8.4, 9);
+  F.values.forEach((v, i) => { const kk = eout(seg(T, .6 + i * 1.3, 1.6 + i * 1.3)) * k, last = i === 3, x = 270 + i * 460; text(v.big, x, 470 + (1 - kk) * 30, { size: last ? 120 : 96, weight: last ? 800 : 300, color: last ? C.green : C.white, a: kk, track: -3 }); text(v.small, x, 580, { size: 21, weight: 500, color: last ? C.green : C.grey, a: kk }); });
+  add(); glow(270 + 3 * 460, 470, 300, C.green, .14 * k * seg(T, 4.4, 5.4)); norm();
+  text(F.aiCost, W / 2, 790, { size: 30, weight: 600, color: C.white, a: fade(T, 6, 6.6, 8.4, 9), track: 4 });
+  text(F.aiCostNote, W / 2, 836, { size: 18, weight: 400, color: C.grey, a: fade(T, 6.2, 6.8, 8.4, 9) });
+}
+function twist(T, t) {
+  g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+  const frz = seg(T, .3, .6);
+  g.save(); g.globalAlpha = 1 - .55 * frz; gantt(9, 1 - seg(T, 4.2, 4.8), frz); g.restore();
+  if (frz > 0 && T < 4.8) { g.fillStyle = `rgba(5,8,13,${.45 * frz})`; g.fillRect(0, 0, W, H); }
+  const k = fade(T, .4, .9, 4.2, 4.8);
+  rr(260, 130, W - 520, 150, 20, rgba([40, 10, 12], .9 * k), rgba(C.red, .95 * k), 3);
+  text('CONFIGURATION CONFLICT', W / 2, 185, { size: 54, weight: 800, color: C.red, a: k, track: 2 });
+  if (F.conflict) text(F.conflict.line, W / 2, 245, { size: 22, weight: 400, color: C.white, a: k });
+  text('ENGINEERING REVIEW REQUIRED', W / 2, 900, { size: 40, weight: 700, color: C.white, a: fade(T, 1.6, 2.2, 4.2, 4.8), track: 4 });
+  // the loop
+  const k2 = fade(T, 4.6, 5.2, 8.4, 9), L = ['OPERATIONS', 'ENGINEERING', 'VALIDATE', 'OPERATIONS'];
+  L.forEach((s, i) => { const kk = seg(T, 4.8 + i * .45, 5.3 + i * .45) * k2, x = 360 + i * 400; rr(x - 150, 420, 300, 84, 18, rgba([18, 24, 34], .95 * kk), rgba(i === 1 ? C.red : C.steel, .8 * kk), 2); text(s, x, 462, { size: 26, weight: 700, color: i === 1 ? C.red : C.white, a: kk, track: 3 }); if (i < 3) line(x + 155, 462, x + 245, 462, C.grey, .7 * seg(T, 5.2 + i * .45, 5.6 + i * .45) * k2, 2); });
+  text('KNOW WHEN NOT TO DECIDE.', W / 2, 680, { size: 66, weight: 800, a: fade(T, 6.6, 7.3, 8.4, 9), track: -1 });
+}
+function governance(T, t) {
+  g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+  const k = fade(T, .2, .8, 6.4, 7), steps = [['AI PROPOSED', C.violet], ['ENGINEERING VALIDATED', C.red], ['HUMAN APPROVED', C.amber], ['EXECUTE', C.green]];
+  steps.forEach(([s, col], i) => { const kk = seg(T, .4 + i * 1.1, 1 + i * 1.1) * k, y = 250 + i * 160; rr(560, y - 50, 800, 100, 20, rgba([16, 22, 32], .95 * kk), rgba(col, .85 * kk), 2); text(s, 640, y, { size: 38, weight: 700, a: kk, align: 'left', track: 2 }); g.strokeStyle = rgba(col, kk); g.lineWidth = 5; g.beginPath(); g.moveTo(1270, y); g.lineTo(1290, y + 18); g.lineTo(1320, y - 18); g.stroke(); if (i < 3) line(960, y + 54, 960, y + 104, C.grey, .6 * seg(T, 1 + i * 1.1, 1.4 + i * 1.1) * k, 2); });
+}
+function end(T, t) {
+  const k = eio(seg(T, 0, 1.2));
+  hall(t, k, .6); stationMarks(.4 * k, false);
+  train(lerp(130, 420, eio(seg(T, 0, 6))), 575, .75, 6, k, 'saved');
+  const vg = g.createLinearGradient(0, 0, 0, 560); vg.addColorStop(0, `rgba(4,6,10,${.85 * seg(T, 1.2, 2)})`); vg.addColorStop(1, 'rgba(4,6,10,0)'); g.fillStyle = vg; g.fillRect(0, 0, W, 560);
+  const k1 = eout(seg(T, 1.4, 2.4)), wa = tw('Lean', 150, 800, -5), wb = tw('AI', 150, 200, -5), sx = W / 2 - (wa + wb) / 2;
+  text('Lean', sx, 190 + (1 - k1) * 24, { size: 150, weight: 800, a: k1, align: 'left', track: -5 });
+  text('AI', sx + wa, 190 + (1 - k1) * 24, { size: 150, weight: 200, color: [214, 170, 120], a: k1, align: 'left', track: -5 });
+  text('Minimum intelligence.', W / 2, 330, { size: 44, weight: 300, a: seg(T, 2.4, 3.1) });
+  text('Maximum business value.', W / 2, 390, { size: 44, weight: 700, a: seg(T, 2.9, 3.6) });
+  text('REDUCE → DECIDE → REASON → VALIDATE → ACT → ENGINEER', W / 2, 470, { size: 20, weight: 700, color: C.copper, a: seg(T, 3.6, 4.3), track: 5 });
+  text('NovaRail is fictional · synthetic data · simulated enterprise systems', W / 2, 1030, { size: 15, weight: 400, color: C.grey, a: .8 * seg(T, 4, 4.6) });
+}
+
+function render(t) {
+  norm(); g.globalAlpha = 1;
+  if (t < SC.disruption) commitment(t);
+  else if (t < SC.reduce) disruption(t - SC.disruption, t);
+  else if (t < SC.decide) reduce(t - SC.reduce, t);
+  else if (t < SC.reason) decide(t - SC.decide, t);
+  else if (t < SC.recovery) reason(t - SC.reason, t);
+  else if (t < SC.value) recovery(t - SC.recovery, t);
+  else if (t < SC.twist) value(t - SC.value, t);
+  else if (t < SC.governance) twist(t - SC.twist, t);
+  else if (t < SC.end) governance(t - SC.governance, t);
+  else end(t - SC.end, t);
+  const v = g.createRadialGradient(W / 2, H / 2, 520, W / 2, H / 2, 1250); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.6)'); g.fillStyle = v; g.fillRect(0, 0, W, H);
+  const fo = seg(t, DURATION - 1.4, DURATION), fi = 1 - seg(t, 0, .6);
+  if (fo + fi > 0) { g.fillStyle = `rgba(5,8,13,${Math.max(fo, fi)})`; g.fillRect(0, 0, W, H); }
+}
+for (const w of [200, 300, 400, 600, 700, 800]) await document.fonts.load(`${w} 40px Inter`);
+window.render = render; window.DURATION = DURATION; window.SCENES = SC; window.FILM_FACTS = F; window.ready = true;
+// Preview mode (npm run film:preview): plays in real time; the renderer drives render(t) frame by frame instead.
+if (!new URLSearchParams(location.search).has('render')) {
+  const t0 = performance.now(), bar = document.getElementById('bar');
+  const loop = () => { const t = ((performance.now() - t0) / 1000) % DURATION; render(t); bar.style.width = `${t / DURATION * 100}%`; requestAnimationFrame(loop); };
+  loop();
+} else render(0);
+</script></body></html>
