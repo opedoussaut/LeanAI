@@ -12,11 +12,12 @@ import { mountScale } from './ui/scale.js';
 import { mountPrereq } from './ui/prereq.js';
 import { mountStory } from './ui/story.js';
 import { mountEngineering } from './ui/engineering.js';
+import { mountRail } from './ui/rail.js';
 import { createBrowserSystem1, initSystem1, system1Status } from './system1/runtime.js';
 import { FEATURES } from './system1/features.js';
 import { MODEL_CARD } from './system1/model.js';
 
-const PAGES = ['story', 'learn', 'demo', 'economics', 'scale', 'prereq', 'technical', 'engineering'];
+const PAGES = ['story', 'learn', 'demo', 'economics', 'scale', 'prereq', 'technical', 'engineering', 'recovery'];
 // Live engine: System 1 runs in the browser (WebGPU → WASM → labelled JS fallback). Reference runs use the JS evaluator of the same weights.
 const engine = new DemoEngine(scenario, { system1: createBrowserSystem1() });
 const reference = new DemoEngine(scenario);
@@ -70,7 +71,8 @@ const views = {
   prereq: mountPrereq($('#page-prereq'), app),
   technical: mountTechnical($('#page-technical'), app),
   story: mountStory($('#page-story'), app),
-  engineering: mountEngineering($('#page-engineering'), app)
+  engineering: mountEngineering($('#page-engineering'), app),
+  recovery: mountRail($('#page-recovery'), app)
 };
 
 function setPage(page, focus = false) {
@@ -79,25 +81,31 @@ function setPage(page, focus = false) {
   for (const p of PAGES) {
     $(`#page-${p}`).hidden = p !== page;
     const tab = $(`#tab-${p}`);
+    if (!tab) continue;
     tab.setAttribute('aria-selected', String(p === page));
     tab.tabIndex = p === page ? 0 : -1;
   }
+  const scn = page === 'recovery' ? 'recovery' : 'factory';
+  document.body.dataset.scenario = scn;
+  $$('[data-scn]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.scn === scn)));
+  if (scn === 'factory') app.lastFactoryPage = page;
   if (location.hash.slice(1) !== page) history.replaceState(null, '', `#${page}`);
   views[page].update?.();
   annotate($(`#page-${page}`));
-  if (focus) $(`#tab-${page}`).focus();
+  if (focus) $(`#tab-${page}`)?.focus();
   window.scrollTo({ top: 0 });
 }
 
 $$('.tabs [role=tab]').forEach(tab => {
   tab.addEventListener('click', () => setPage(tab.dataset.page));
   tab.addEventListener('keydown', e => {
-    const i = PAGES.indexOf(app.page);
-    const map = { ArrowRight: (i + 1) % PAGES.length, ArrowLeft: (i + PAGES.length - 1) % PAGES.length, Home: 0, End: PAGES.length - 1 };
-    if (e.key in map) { e.preventDefault(); setPage(PAGES[map[e.key]], true); }
+    const TABS = PAGES.filter(p => p !== 'recovery'), i = TABS.indexOf(app.page);
+    const map = { ArrowRight: (i + 1) % TABS.length, ArrowLeft: (i + TABS.length - 1) % TABS.length, Home: 0, End: TABS.length - 1 };
+    if (e.key in map) { e.preventDefault(); setPage(TABS[map[e.key]], true); }
   });
 });
-$('.brand').addEventListener('click', e => { e.preventDefault(); setPage('story'); });
+$('.brand').addEventListener('click', e => { e.preventDefault(); setPage(app.page === 'recovery' ? 'recovery' : 'story'); });
+$$('[data-scn]').forEach(b => b.addEventListener('click', () => setPage(b.dataset.scn === 'recovery' ? 'recovery' : (app.lastFactoryPage ?? 'story'))));
 $('#run-pill').addEventListener('click', () => setPage('demo'));
 $('#glossary-btn').addEventListener('click', () => app.inspect('Plain-language glossary', 'Words used in this demonstrator', glossaryMarkup()));
 installTermTips();

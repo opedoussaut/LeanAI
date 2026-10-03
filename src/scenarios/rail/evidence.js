@@ -88,7 +88,7 @@ export function reduce(dataset = generateRailDataset(), { horizonDays = 12, noti
   const evidenceBytes = jsonBytes(ev);
   const rawTokens = Math.ceil(rawBytes / 4), evidenceTokens = estimateTokens(ev);
   const telemetry = {
-    rawRecords, evidenceItems: ev.length, rawBytes, evidenceBytes, rawTokens, evidenceTokens,
+    rawRecords, evidenceItems: ev.length, sourceRecords: Object.fromEntries(Object.entries(dataset).map(([k, l]) => [k, l.length])), rawBytes, evidenceBytes, rawTokens, evidenceTokens,
     reductionPercentage: (1 - evidenceTokens / rawTokens) * 100,
     recordReductionPercentage: (1 - ev.length / rawRecords) * 100,
     processingTime: now() - t0

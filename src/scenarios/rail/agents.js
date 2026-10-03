@@ -15,7 +15,7 @@ const allocationsFromStock = (lots, demand) => {
 
 export const SPECIALISTS = [
   {
-    id: 'supply', name: 'Supply', domain: 'SUPPLY', model: 'flash', icon: 'box',
+    id: 'supply', name: 'Supply', domain: 'SUPPLY', model: 'flash', icon: 'rack',
     mission: 'Find every unit of the delayed component that can reach the line in time: stock by lot and location, transfer lanes, supplier options. Never use held, reserved or kitted stock.',
     tools: ['getDisruption', 'getTrainsetStatus', 'findStock', 'checkLot'],
     status: ['Checking available inventory', 'Checking transfer lanes and supplier options', 'Proposing stock allocation'],
@@ -31,7 +31,7 @@ export const SPECIALISTS = [
     }
   },
   {
-    id: 'planning', name: 'Production planning', domain: 'PLANNING', model: 'flash', icon: 'calendar',
+    id: 'planning', name: 'Production planning', domain: 'PLANNING', model: 'flash', icon: 'clock',
     mission: 'Protect delivery commitments: S30 sequence, station capacity, schedule slack and weekend recovery for the trainsets the supply cannot cover in time.',
     tools: ['getS30Sequence', 'proposeSequence'],
     status: ['Reading the S30 sequence and capacity', 'Evaluating sequence alternatives', 'Checking slack against delivery commitments'],
