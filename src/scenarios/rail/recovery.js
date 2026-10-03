@@ -17,7 +17,7 @@ export function factsFrom(ev) {
     return { id: t.keys.trainset, config: t.v.configuration, s30Day: t.v.s30Day, needDay: opDays.length ? Math.min(...opDays) : null, kitted: t.v.kitted, kitLot: t.v.kitLot, plannedCompletion: t.v.s30Day + S30_DAYS - 1, slack: m.v.slackDays, contract: m.keys.contract, acceptanceDay: acc[t.keys.trainset]?.v.boardDay ?? null, ldPerDay: contracts[m.keys.contract].ldPerTrainsetDayEur, milestoneEur: contracts[m.keys.contract].milestonePaymentEur };
   });
   return {
-    disruption: { ...dis.v, ...dis.keys, po: po.keys.po },
+    disruption: { ...dis.v, ...dis.keys, po: po.keys.po, pegging: po.v.pegging },
     pegged, needed: Object.fromEntries(pegged.map(p => [p.id, T('OPERATION').filter(o => o.keys.trainset === p.id).length])),
     lots: T('STOCK_LOT').map(l => ({ lot: l.keys.lot, location: l.keys.location, ...l.v })),
     holds: T('QUALITY_HOLD').map(q => ({ ncr: q.keys.ncr, lot: q.keys.lot })),

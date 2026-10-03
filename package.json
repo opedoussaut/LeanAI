@@ -11,6 +11,15 @@
     "start": "node server.mjs",
     "dev": "node --watch server.mjs",
     "test": "node --test",
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "start:live": "node server/rail-live.mjs",
+    "film:preview": "node scripts/film.mjs --preview",
+    "film": "node scripts/film.mjs"
+  },
+  "optionalDependencies": {
+    "@a2a-js/sdk": "1.3.0",
+    "@google/adk": "2.2.0",
+    "@google/genai": "2.27.0",
+    "@modelcontextprotocol/sdk": "1.32.0"
   }
 }
