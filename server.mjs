@@ -13,7 +13,7 @@ function publicFile(path) {
   if (path.includes('..')) return null;
   if (/^\/(src|styles)\/[A-Za-z0-9_\-/]+\.(js|css)$/.test(path)) return path.slice(1);
   // System 1 runtime assets: the decision model, the vendored ONNX Runtime Web, and the cinematic videos.
-  if (/^\/models\/system1\/(decision-mlp\.onnx|model-card\.json)$/.test(path)) return path.slice(1);
+  if (/^\/models\/(system1|rail-system1)\/(decision-mlp\.onnx|model-card\.json)$/.test(path)) return path.slice(1);
   if (/^\/vendor\/onnxruntime-web\/1\.22\.0\/[A-Za-z0-9_.\-]+\.(mjs|wasm)$/.test(path)) return path.slice(1);
   if (/^\/media\/[A-Za-z0-9_\-]+\.(mp4|jpg)$/.test(path)) return path.slice(1);
   // Recorded Cameo evidence (native diagram exports and the agent's logs) for the Engineering page.

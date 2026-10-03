@@ -9,7 +9,7 @@ const fromEpoch = s => Math.floor((s * 1000 - D0) / DAY);
 const isWeekend = d => ((d % 7) + 7) % 7 >= 5;
 
 /** Run the six reduction stages. Returns evidence, stage counts and telemetry. */
-export function reduce(dataset = generateRailDataset(), { horizonDays = 12 } = {}) {
+export function reduce(dataset = generateRailDataset(), { horizonDays = 12, notice = 'SN-26-0412' } = {}) {
   const t0 = now();
   const rawRecords = countRecords(dataset);
   const rawBytes = jsonBytes(dataset);
@@ -19,7 +19,7 @@ export function reduce(dataset = generateRailDataset(), { horizonDays = 12 } = {
 
   // 1 · TRIGGER — supplier notices received today; the delayed PO line and what it is pegged to.
   const notices = dataset.supplier.filter(r => r.entry === 'NOTICE' && dayOf(r.received) === 0);
-  const n = notices[0];
+  const n = notices.find(r => r.notice === notice);
   if (!n) throw new Error('No supplier notice received today');
   const po = dataset.erp.find(r => r.record_type === 'PO_LINE' && r.po === n.po_ref && r.material === n.item);
   const delay = dayOf(n.new_date) - dayOf(n.old_date);
@@ -30,8 +30,8 @@ export function reduce(dataset = generateRailDataset(), { horizonDays = 12 } = {
   // 2 · SCOPE — trainsets pegged to the delayed line, with configuration and kit status.
   const pegged = po.pegging.split(',');
   const sched = dataset.planning.filter(r => r.kind === 'SCHEDULE');
-  const kits = dataset.inventory.filter(r => r.status === 'KITTED' && r.item.startsWith('TIM-'));
-  const family = n.item.split('-').slice(0, 2).join('-');            // TIM-3300
+  const family = n.item.replace(/-[A-Z]$/, '');                       // part family without the variant letter (TIM-3300)
+  const kits = dataset.inventory.filter(r => r.status === 'KITTED' && r.item.startsWith(family) && r.kitted_for);
   for (const ts of pegged) {
     const s30 = sched.find(r => r.trainset === ts && r.station === 'S30');
     const kit = kits.find(k => k.kitted_for.split(',').includes(ts));

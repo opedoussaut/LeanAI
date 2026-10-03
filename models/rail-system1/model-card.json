@@ -1,0 +1,62 @@
+{
+  "name": "LeanAI \u00b7 Industrial Recovery decision model",
+  "version": "1.0.0",
+  "architecture": "MLP 9 \u2192 24 \u2192 24 \u2192 9 (ReLU), three heads",
+  "parameters": 1065,
+  "onnx": {
+    "file": "decision-mlp.onnx",
+    "bytes": 5452,
+    "sha256": "03519179481a841491bdb32a4211572c3329efbcea3f8570b6e09f513674d2d3",
+    "opset": 17
+  },
+  "inputs": [
+    "delay_days",
+    "criticality",
+    "inventory_coverage",
+    "products_affected",
+    "schedule_slack",
+    "supplier_alternatives",
+    "configuration_complexity",
+    "financial_exposure",
+    "engineering_implication"
+  ],
+  "outputs": {
+    "reasoning_required": [
+      "NO",
+      "YES"
+    ],
+    "route": [
+      "DIRECT",
+      "AGENTIC",
+      "HUMAN_REVIEW"
+    ],
+    "domains": [
+      "PLANNING",
+      "SUPPLY",
+      "CONFIGURATION",
+      "COST_RISK"
+    ]
+  },
+  "training": {
+    "samples": 12000,
+    "generator": "synthetic disruptions over plausible ranges, labelled by the planning rules below",
+    "label_noise": 0.02,
+    "rules": [
+      "problem = criticality >= 0.5 and inventory_coverage < 1 and delay_days(\u00d720) > schedule_slack(\u00d710)  \u2014 the delay cannot be absorbed by slack or exact-variant stock",
+      "cross_domain = count of [products_affected >= 0.4, configuration_complexity >= 0.75, engineering_implication >= 0.5, financial_exposure >= 0.15, supplier_alternatives > 0] >= 2",
+      "reasoning_required = YES if problem and cross_domain; else NO (a deterministic rule or one owner handles it)",
+      "route = HUMAN_REVIEW if problem and supplier_alternatives == 0 and inventory_coverage < 0.2 and financial_exposure > 0.6 (nothing to recover with: a management decision); AGENTIC if reasoning_required; else DIRECT",
+      "domains (only when AGENTIC): PLANNING if delay > slack; SUPPLY if coverage < 1; CONFIGURATION if configuration_complexity >= 0.75 or engineering_implication >= 0.5; COST_RISK if financial_exposure >= 0.1"
+    ],
+    "seed": 11,
+    "optimizer": "Adam, 200 epochs, batch 256"
+  },
+  "holdout": {
+    "holdout_samples": 3000,
+    "reasoning_required_accuracy": 0.9956666666666667,
+    "route_accuracy": 0.993,
+    "domains_exact_match": 0.9913333333333333
+  },
+  "onnx_vs_numpy_max_abs_diff": 5.960464477539063e-08,
+  "scope": "Bounded triage of supply disruptions for the fictional NovaRail scenario. Illustrative rules, not a company standard."
+}

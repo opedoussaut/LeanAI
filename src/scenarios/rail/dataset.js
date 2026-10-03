@@ -54,6 +54,8 @@ export const DISRUPTION = {
   part: 'TIM-3300-B', partName: 'Traction inverter module, 3.3 kV, variant B', qty: 18,
   originalDay: 1, newDay: 9, peggedTo: ['TS-47', 'TS-48', 'TS-49'], reason: 'IGBT stack re-test at the supplier'
 };
+/** A routine notice received the same day (see generator): 1 day late, fully covered by stock. */
+export const ROUTINE = { id: 'SN-26-0409' };
 /** Traction inverter stock (the lots the evidence must find). */
 export const INVERTER_LOTS = [
   { lot: 'L-7731', part: 'TIM-3300-B', qty: 4, location: 'WH-N1', site: 'Plant North', status: 'FREE', approvedFor: ['C-3'] },
@@ -151,6 +153,13 @@ export function generateRailDataset(seed = 20261005) {
   for (const l of INVERTER_LOTS) D.inventory.push({ type: 'STOCK', item: l.part, loc: l.location, lot: l.lot, on_hand: l.qty, status: l.status, last_count: dayIso(-2), ...(l.kittedFor ? { kitted_for: l.kittedFor.join(',') } : {}), ...(l.minServiceStock ? { min_service_stock: l.minServiceStock } : {}) });
   D.inventory.push({ type: 'STOCK', item: 'TIM-3300-B', loc: 'LS-N30', lot: 'L-7720', on_hand: 6, status: 'KITTED', kitted_for: 'TS-47', last_count: dayIso(-1) });
 
+  // A second, routine notice received the same day (used to show that most disruptions need no agents):
+  // one component for TS-52's interior fit-out, one day late, fully covered by free stock on site.
+  const routineOp = D.mes.find(r => r.rec === 'OPERATION' && r.unit === 'TS-52' && r.ws === 'S40' && /^(SEAT|DOOR|HVAC|LGT|PIS|CAB)-/.test(r.material));
+  const routinePart = routineOp.material;
+  D.erp.push({ record_type: 'PO_LINE', po: 'PO-4500931', line: 10, material: routinePart, supplier: 'SUP-163', qty: 2, due_date: erpDate(10), status: 'OPEN', pegging: 'TS-52' });
+  D.inventory.push({ type: 'STOCK', item: routinePart, loc: 'WH-N1', lot: 'L-7801', on_hand: 40, status: 'FREE', last_count: dayIso(-1) });
+  D.supplier.push({ entry: 'NOTICE', notice: ROUTINE.id, supplier: 'SUP-163', po_ref: 'PO-4500931', item: routinePart, qty: 2, old_date: dayIso(10), new_date: dayIso(11), reason: 'Carrier rescheduled', received: dayIso(0) });
   // Supplier management — commitments history (1,980), notices, options
   for (let i = 0; i < 1_980; i++) D.supplier.push({ entry: 'COMMITMENT', supplier: `SUP-${R.int(100, 260)}`, po_ref: `PO-45${R.int(10000, 99999)}`, promised: dayIso(R.int(-60, 60)), confirmed: R.chance(0.86), otd_score: Math.round(R.range(0.72, 0.99) * 100) / 100 });
   D.supplier.push({ entry: 'NOTICE', notice: DISRUPTION.id, supplier: DISRUPTION.supplier, po_ref: DISRUPTION.po, item: DISRUPTION.part, qty: DISRUPTION.qty, old_date: dayIso(DISRUPTION.originalDay), new_date: dayIso(DISRUPTION.newDay), reason: DISRUPTION.reason, received: dayIso(0) });

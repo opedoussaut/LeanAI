@@ -13,7 +13,8 @@ export function factsFrom(ev) {
   const lanes = T('LANE').map(l => ({ from: l.keys.from, to: l.keys.to, ...l.v }));
   const pegged = T('TRAINSET').map(t => {
     const m = ms[t.keys.trainset];
-    return { id: t.keys.trainset, config: t.v.configuration, s30Day: t.v.s30Day, kitted: t.v.kitted, kitLot: t.v.kitLot, plannedCompletion: t.v.s30Day + S30_DAYS - 1, slack: m.v.slackDays, contract: m.keys.contract, acceptanceDay: acc[t.keys.trainset]?.v.boardDay ?? null, ldPerDay: contracts[m.keys.contract].ldPerTrainsetDayEur, milestoneEur: contracts[m.keys.contract].milestonePaymentEur };
+    const opDays = T('OPERATION').filter(o => o.keys.trainset === t.keys.trainset).map(o => o.v.day);
+    return { id: t.keys.trainset, config: t.v.configuration, s30Day: t.v.s30Day, needDay: opDays.length ? Math.min(...opDays) : null, kitted: t.v.kitted, kitLot: t.v.kitLot, plannedCompletion: t.v.s30Day + S30_DAYS - 1, slack: m.v.slackDays, contract: m.keys.contract, acceptanceDay: acc[t.keys.trainset]?.v.boardDay ?? null, ldPerDay: contracts[m.keys.contract].ldPerTrainsetDayEur, milestoneEur: contracts[m.keys.contract].milestonePaymentEur };
   });
   return {
     disruption: { ...dis.v, ...dis.keys, po: po.keys.po },
@@ -47,6 +48,7 @@ export function baseline(F) {
   const r = F.rates, lines = [], perTrainset = [];
   for (const p of F.pegged) {
     if (p.kitted) { perTrainset.push({ trainset: p.id, action: 'none needed — kit already at line side', delay: 0, slip: 0 }); continue; }
+    if (p.needDay == null || F.disruption.newDay <= p.needDay) { perTrainset.push({ trainset: p.id, action: 'none needed — parts arrive before they are used', delay: 0, slip: 0 }); continue; }
     const completion = Math.max(p.s30Day, F.disruption.newDay) + S30_DAYS - 1;
     const c = consequences(F, p, completion);
     perTrainset.push({ trainset: p.id, completion, ...c });
@@ -54,14 +56,14 @@ export function baseline(F) {
     if (c.deferralEur) lines.push({ id: `def-${p.id}`, label: `Milestone payment deferred ${p.id}`, eur: eur(c.deferralEur), formula: `€${p.milestoneEur.toLocaleString('en-US')} × ${r.FINANCING.annual_pct} % × ${r.FINANCING.deferral_days}/365 (misses the acceptance board)` });
     if (c.delay > 0) lines.push({ id: `oos-${p.id}`, label: `Out-of-sequence rework ${p.id}`, eur: eur(r.OUT_OF_SEQUENCE.rework_hours * r.LABOUR.eur_per_hour), formula: `${r.OUT_OF_SEQUENCE.rework_hours} h × €${r.LABOUR.eur_per_hour}/h (pulled off the line mid-integration)` });
   }
-  const idleDays = F.pegged.filter(p => !p.kitted).length * S30_DAYS;
-  lines.push({ id: 'idle-s30', label: 'S30 crew idle in the empty slots', eur: eur(idleDays * bayDayEur(r)), formula: `${idleDays} days × (${r.S30_BAY.crew_per_shift} × ${r.S30_BAY.shifts_per_day} × ${r.S30_BAY.shift_hours} h × €${r.LABOUR.eur_per_hour} + €${r.S30_BAY.overhead_eur_per_day})` });
+  const idleDays = perTrainset.filter(x => x.delay > 0).length * S30_DAYS;
+  if (idleDays) lines.push({ id: 'idle-s30', label: 'S30 crew idle in the empty slots', eur: eur(idleDays * bayDayEur(r)), formula: `${idleDays} days × (${r.S30_BAY.crew_per_shift} × ${r.S30_BAY.shifts_per_day} × ${r.S30_BAY.shift_hours} h × €${r.LABOUR.eur_per_hour} + €${r.S30_BAY.overhead_eur_per_day})` });
   return { lines, total: lines.reduce((a, l) => a + l.eur, 0), perTrainset, assumption: 'No recovery action: affected trainsets wait for the late batch; the rest of the line keeps its slots.' };
 }
 
 /** Free stock usable by family (operational view: same part family, any variant). Holds, service reserves and kits are excluded. */
 export function availableStock(F, { approvedOnlyFor = null } = {}) {
-  const fam = F.disruption.part.split('-').slice(0, 2).join('-');
+  const fam = F.disruption.part.replace(/-[A-Z]$/, '');
   return F.lots.filter(l => l.part.startsWith(fam) && l.status === 'FREE' && !F.holds.some(h => h.lot === l.lot))
     .filter(l => !approvedOnlyFor || F.rules.some(r => r.config === approvedOnlyFor && r.part === l.part && r.status === 'APPROVED'))
     .map(l => ({ ...l, readyDay: laneFor(F, l.location)?.days ?? Infinity, laneCostEur: laneFor(F, l.location)?.costEur ?? null }))

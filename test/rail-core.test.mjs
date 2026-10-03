@@ -11,12 +11,12 @@ test('data: the synthetic dataset is deterministic and has ~18,400 structured re
   const a = generateRailDataset(), b = generateRailDataset();
   assert.equal(JSON.stringify(a), JSON.stringify(b));
   const n = countRecords(a);
-  assert.equal(n, 18_404);
+  assert.equal(n, 18_407);
   assert.deepEqual(Object.keys(a).sort(), ['configuration', 'cost', 'erp', 'inventory', 'logistics', 'mes', 'planning', 'quality', 'supplier']);
   for (const [k, list] of Object.entries(a)) assert.ok(list.length > 300, `${k} has ${list.length}`);
   // consistency: the delayed PO line, its pegging and its notice exist and agree
   const po = a.erp.find(r => r.po === DISRUPTION.po && r.material === DISRUPTION.part);
-  const notice = a.supplier.find(r => r.entry === 'NOTICE');
+  const notice = a.supplier.find(r => r.entry === 'NOTICE' && r.notice === DISRUPTION.id);
   assert.equal(po.pegging, DISRUPTION.peggedTo.join(','));
   assert.equal(notice.po_ref, po.po);
   for (const l of INVERTER_LOTS) assert.ok(a.inventory.some(r => r.lot === l.lot && r.item === l.part && r.on_hand === l.qty));
@@ -24,7 +24,7 @@ test('data: the synthetic dataset is deterministic and has ~18,400 structured re
 
 test('REDUCE: ~18,400 records become 60–80 evidence items, >99 % less context, computed not typed in', () => {
   const { evidence, telemetry } = run();
-  assert.equal(telemetry.rawRecords, 18_404);
+  assert.equal(telemetry.rawRecords, 18_407);
   assert.equal(telemetry.evidenceItems, evidence.length);
   assert.ok(evidence.length >= 60 && evidence.length <= 80, `${evidence.length}`);
   assert.ok(telemetry.reductionPercentage > 99, `${telemetry.reductionPercentage}`);
