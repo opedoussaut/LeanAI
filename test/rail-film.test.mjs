@@ -5,7 +5,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { railStory } from '../src/scenarios/rail/facts.js';
-import { filmFacts, SCENES, DURATION, googleFilmFacts, GOOGLE_SCENES, GOOGLE_DURATION } from '../src/scenarios/rail/film.js';
+import { filmFacts, SCENES, DURATION, googleFilmFacts, bruteForce, GOOGLE_SCENES, GOOGLE_DURATION } from '../src/scenarios/rail/film.js';
 import { generateRailDataset } from '../src/scenarios/rail/dataset.js';
 import { DemoEngine } from '../src/engine/engine.js';
 import { scenario } from '../src/scenarios/ai-factory/scenario.js';
@@ -68,6 +68,19 @@ test('google film: figures come from the story, the stack from the recorded agen
   assert.ok(f.tools.every(t => t.system), 'every MCP tool names its enterprise system');
   assert.equal(f.sample.structuredContent.status, 'NOT_APPROVED');
   for (const k of ['@google/adk', '@google/genai', '@a2a-js/sdk', '@modelcontextprotocol/sdk']) assert.ok(st.packages[k], k);
+  assert.equal(f.routine.impact, 'No delivery at risk');
+  assert.match(f.routine.margin, /arrives \d+ days before TS-\d+/);
+  assert.equal(f.company.trainsets, `${s.company.trainsetsInProduction} trainsets in production`);
+});
+
+test('google film: brute force vs curated is computed from the same tokens and price table as the AI cost', async () => {
+  const s = await railStory(), b = bruteForce(s);
+  assert.ok(Math.abs(b.curatedEur - s.ai.costEur) < 1e-9, 'curated cost is the decision cost shown on the page');
+  assert.equal(b.bruteTokens - b.curatedTokens, s.ai.modelCalls * s.reduce.rawTokens);
+  assert.ok(b.factor > 100 && b.savedPct > 99);
+  assert.ok(Math.abs(b.relevantShare - s.reduce.evidenceItems / s.reduce.rawRecords * 100) < 1e-9);
+  const f = googleFilmFacts(s, stack());
+  assert.equal(f.brute.bruteEur, `€${b.bruteEur.toFixed(2)}`);
 });
 
 test('google film: types no figure in, reads the shared story and the real ADK code, says the run is replayed', async () => {
@@ -77,12 +90,12 @@ test('google film: types no figure in, reads the shared story and the real ADK c
   assert.match(html, /src\/providers\/gemini-adk\.mjs/);
   assert.match(html, /replayed deterministically/);
   const f = googleFilmFacts(await railStory(), stack());
-  for (const literal of [f.main.atStake, f.values.protected, f.values.cost, f.ai.cost, f.ground.raw, f.perEuro, f.notice.delay]) assert.ok(!html.includes(literal), `film hard-codes "${literal}"`);
-  assert.ok(GOOGLE_DURATION >= 60 && GOOGLE_DURATION <= 90);
+  for (const literal of [f.main.atStake, f.values.protected, f.values.cost, f.ai.cost, f.ground.raw, f.perEuro, f.notice.delay, f.brute.bruteEur, f.brute.factor, f.brute.bruteTokens, f.brute.savedPct, f.company.ld]) assert.ok(!html.includes(literal), `film hard-codes "${literal}"`);
+  assert.ok(GOOGLE_DURATION >= 60 && GOOGLE_DURATION <= 150);
   const t = Object.values(GOOGLE_SCENES);
   assert.deepEqual(t, [...t].sort((a, b) => a - b));
   assert.ok(t.at(-1) < GOOGLE_DURATION);
-  assert.match(readFileSync(join(ROOT, 'media/render-film-rail.py'), 'utf8'), /leanai-google-agentic-stack-80s\.mp4/);
+  assert.match(readFileSync(join(ROOT, 'media/render-film-rail.py'), 'utf8'), /leanai-value-first-google-agentic-stack\.mp4/);
 });
 
 test('positioning: no aerospace or real-manufacturer reference anywhere in the repository', () => {

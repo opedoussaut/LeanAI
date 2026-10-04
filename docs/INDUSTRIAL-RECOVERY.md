@@ -119,21 +119,27 @@ publish their A2A agent cards. The page shows **LIVE** only when the local endpo
 
 ### Second film — value first, built on Google's agentic stack
 
-`media/leanai-google-agentic-stack-80s.mp4` — 80 s, 1920×1080, 30 fps, original soundtrack (`media/sound-film-google.py`).
-Where the first film tells the recovery story, this one shows **why AI runs at all** and **how Google's stack carries it**:
+`media/leanai-value-first-google-agentic-stack.mp4` — 131 s, 1920×1080, 30 fps, original soundtrack (`media/sound-film-google.py`).
+Where the first film tells the recovery story, this one argues **why AI runs at all, what curation saves, and why Google's
+stack carries it**:
 
 | Time | Scene | What it shows |
 |---|---|---|
-| 0–7 s | Business case | *Every AI project should start with a business case. Not with a model.* · the supplier notice |
-| 7–17 s | Value gate | two notices the same morning: routine (€0 at stake → deterministic rules, no model call) vs inverter batch (€420K → agentic reasoning) |
-| 17–22 s | Grounding | 18,407 records → 76 evidence items; Gemini never sees the raw ERP |
-| 22–29 s | ADK | the real `LlmAgent` + `MCPToolset` code from `src/providers/gemini-adk.mjs`, and the four `novarail_*` specialists |
-| 29–37 s | A2A | the agent cards the specialists publish through ADK `toA2a` (protocol, transport, skills) |
-| 37–45 s | MCP | six enterprise systems, ten tools, and a real `tools/call checkConfiguration` answer |
-| 45–52 s | Contract | Gemini returns JSON → contract check → deterministic validation → usage measured · *Models are replaceable. The business architecture is not.* |
-| 52–62 s | Outcome | €389K protected · AI cost €0.06 · value per € of AI |
-| 62–71 s | Twist | configuration conflict caught by an MCP tool → Gemini proposed → engineering → human |
-| 71–80 s | End | *Value first. AI where it pays. Engineering always.* |
+| 0–8 s | Business case | *Every AI project should start with a business case. Not with a model.* |
+| 8–20 s | The company | NovaRail (fictional): the S10–S70 line, 12 trainsets in production, two configurations, €21,000/day late-delivery damages, 9 systems / 18,407 records |
+| 20–29 s | The notice | 18 × TIM-3300-B, 8 days late, pegged to TS-47/48/49 · the business question |
+| 29–41 s | Value gate | a routine notice the same morning (1 day late, still arrives 2 days before it is needed → a rule handles it, no LLM call) vs the inverter batch (€420K exposure, with its four cost lines → agentic reasoning) |
+| 41–57 s | Brute force vs curated | the same 18 model turns with every raw record (11.1 M tokens, €15.35) vs 76 evidence items (15 K tokens, €0.06) — 253× cheaper, and the relevant facts would be 0.4 % of a brute-force context |
+| 57–71 s | Why Google | Gemini (structured JSON, usage per call) · ADK (open source, code-first) · A2A (open protocol, Linux Foundation) · MCP (native in ADK) — each with what it brings to this case |
+| 71–101 s | ADK · A2A · MCP · contract | the real `LlmAgent` code, the agent cards, the MCP tools and a real tool answer, Gemini's output checked by code |
+| 101–114 s | What it saves | versus doing nothing: €389K protected · versus brute-force AI: €15.35 → €0.06 per decision (€15,349 → €61 per 1,000) · *the AI bill was never the point* |
+| 114–123 s | Twist | configuration conflict → engineering → human |
+| 123–131 s | End | *Value first. AI where it pays. Engineering always.* |
+
+**Brute-force method** (`bruteForce()` in `src/scenarios/rail/film.js`; computed, never run): curated = the specialists'
+tokens for this decision (the AI cost shown on the page); brute force = the same model turns, each also carrying all raw
+records (tokens ≈ characters ÷ 4); both at the Flash-tier list price. A real brute-force agent might use fewer turns or
+caching, so treat the factor as an order of magnitude, not a quote.
 
 Render with `npm run film:google` (preview: `npm run film:google:preview`). Figures come from `railStory()` through
 `googleFilmFacts()`; the agent cards, MCP tool list, sample call and package versions come from

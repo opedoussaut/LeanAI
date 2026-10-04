@@ -47,17 +47,37 @@ export function filmFacts(story) {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Second film — "Value first, built on Google's agentic stack" (media/film-google.html). Same story source.
-export const GOOGLE_DURATION = 80;
-export const GOOGLE_SCENES = { open: 0, gate: 7, ground: 17, adk: 22, a2a: 29, mcp: 37, contract: 45, outcome: 52, twist: 62, end: 71 };
+import { tokenCostEur, PRICES, USD_TO_EUR } from '../../providers/prices.js';
+export const GOOGLE_DURATION = 131;
+export const GOOGLE_SCENES = { open: 0, company: 8, notice: 20, gate: 29, brute: 41, why: 57, adk: 71, a2a: 78, mcp: 86, contract: 94, savings: 101, twist: 114, end: 123 };
 
+/**
+ * Brute force vs curated context, computed — never run. Method (shown on screen):
+ *  curated     = the specialists' tokens for this decision (same as the AI cost of the page);
+ *  brute force = the same model turns, each also carrying every raw record (tokens ≈ characters ÷ 4);
+ *  both priced at the Flash-tier list price (thinking billed as output).
+ */
+export function bruteForce(story) {
+  const s = story, out = s.ai.outputTokens + s.ai.thinkingTokens;
+  const curatedIn = s.ai.inputTokens, bruteIn = s.ai.inputTokens + s.ai.modelCalls * s.reduce.rawTokens;
+  const curatedEur = tokenCostEur('flash', curatedIn, out), bruteEur = tokenCostEur('flash', bruteIn, out);
+  return { turns: s.ai.modelCalls, rawPerTurn: s.reduce.rawTokens, evidenceTokens: s.reduce.evidenceTokens, curatedTokens: curatedIn + out, bruteTokens: bruteIn + out, curatedEur, bruteEur,
+    factor: bruteEur / curatedEur, savedPct: (1 - curatedEur / bruteEur) * 100, relevantShare: s.reduce.evidenceItems / s.reduce.rawRecords * 100,
+    price: `${PRICES.flash.label} list price $${PRICES.flash.inPerMUsd} in / $${PRICES.flash.outPerMUsd} out per M tokens · $1 = €${USD_TO_EUR}` };
+}
+
+const tok = v => v >= 1e6 ? `${(v / 1e6).toFixed(1)} M` : v >= 1e4 ? `${Math.round(v / 1000)} K` : n(v);
 export function googleFilmFacts(story, stack) {
-  const s = story, e = s.economics;
+  const s = story, e = s.economics, b = bruteForce(s), c = s.company, r = s.decide.routine;
   const perEuro = e.valueProtected / s.ai.costEur;
   return {
-    notice: { id: s.disruption.notice, line: `${s.disruption.qty} × ${s.disruption.part} · traction inverter modules`, delay: `${s.disruption.delayDays} days late`, affected: s.affected.map(a => a.id).join(' · ') },
-    routine: { line: `${s.decide.routine.part} · ${s.decide.routine.delayDays} day late`, atStake: `€${n(s.decide.routine.exposure)}`, aiCost: `€${s.decide.routine.aiCostEur.toFixed(2)}`, verdict: s.decide.routine.verdict, path: s.decide.routine.path },
-    main: { atStake: kEur(e.exposure), verdict: s.decide.verdict, path: s.decide.path, model: `${n(s.decide.parameters)}-parameter decision model · in the browser · €0` },
+    company: { name: c.name, product: c.product, trainsets: `${c.trainsetsInProduction} trainsets in production`, configurations: c.configurations, stations: c.stations, ld: `€${n(c.ldPerTrainsetDayEur)} per trainset per day late`, systems: `${c.systems} enterprise systems`, records: `${n(s.reduce.rawRecords)} records` },
+    notice: { id: s.disruption.notice, qty: s.disruption.qty, part: s.disruption.part, line: `${s.disruption.qty} × ${s.disruption.part} · traction inverter modules`, delay: `${s.disruption.delayDays} days late`, affected: s.affected.map(a => a.id).join(' · '), trainsets: `${s.affected.length} trainsets` },
+    routine: { line: `${r.qty} × ${r.part} · ${r.delayDays} day late`, margin: r.marginDays > 0 ? `Still arrives ${r.marginDays} days before ${r.trainset} needs it` : `Needed by ${r.trainset}`, impact: r.exposure > 0 ? `Exposure ${kEur(r.exposure)}` : 'No delivery at risk', aiCost: `€${r.aiCostEur.toFixed(2)}`, verdict: r.verdict, path: r.path },
+    main: { atStake: kEur(e.exposure), lines: e.exposureLines.map(l => l.label.replace(/ TS-\d+$/, '')).filter((v, i, a) => a.indexOf(v) === i), verdict: s.decide.verdict, path: s.decide.path, model: `${n(s.decide.parameters)}-parameter decision model · in the browser · no LLM call` },
     ground: { raw: n(s.reduce.rawRecords), evidence: String(s.reduce.evidenceItems), pct: `${s.reduce.reductionPercentage.toFixed(1)} %` },
+    brute: { turns: b.turns, rawPerTurn: tok(b.rawPerTurn), evidenceTokens: tok(b.evidenceTokens), bruteTokens: tok(b.bruteTokens), curatedTokens: tok(b.curatedTokens), bruteEur: `€${b.bruteEur.toFixed(2)}`, curatedEur: `€${b.curatedEur.toFixed(2)}`, ratio: b.curatedTokens / b.bruteTokens, factor: `${Math.round(b.factor)}×`, savedPct: `${b.savedPct.toFixed(1)} %`, share: `${b.relevantShare.toFixed(1)} %`, price: b.price,
+      per1000: { brute: `€${n(b.bruteEur * 1000)}`, curated: `€${n(b.curatedEur * 1000)}` } },
     agents: Object.entries(stack.a2a).map(([id, c]) => ({ id, name: c.name, protocol: c.protocolVersion, tools: c.skills.filter(k => k.name !== 'model').map(k => k.name), transport: c.preferredTransport })),
     tools: stack.mcp.tools.map(t => ({ name: t.name, system: (t.description.match(/^\[([^\]]+)\]/) ?? [])[1] ?? '' })),
     sample: stack.mcp.sampleCall,

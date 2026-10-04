@@ -13,7 +13,7 @@ canvas { display: block; width: min(100vw, 177.78vh); height: auto; }
 </style></head>
 <body><canvas id="c" width="1920" height="1080"></canvas><div id="bar"></div>
 <script type="module">
-// LeanAI · Industrial Recovery — "Value first. Built on Google's agentic stack." (1920×1080, 80 s). Deterministic render(t).
+// LeanAI · Industrial Recovery — "Value first. Built on Google's agentic stack." (1920×1080, see GOOGLE_DURATION). Deterministic render(t).
 // Figures: railStory() → googleFilmFacts(), the same source as the page. Google-stack artifacts: evidence/google/stack.json
 // (the real MCP tool list and the real A2A agent cards served by Google ADK) and the real LlmAgent definition read from
 // src/providers/gemini-adk.mjs. Nothing numeric is typed in. NovaRail is fictional; no third-party logos are drawn.
@@ -67,68 +67,143 @@ const CODE = [adkLines[0], ...adkLines.slice(1).flatMap(l => l.length > 74 ? l.s
 const SYS_COL = { ERP: K.blue, MES: K.violet, Inventory: K.teal, Planning: K.amber, Configuration: K.red, 'Cost/Risk': K.green };
 
 // ---------- scenes ----------
+const ORDER = Object.entries(SC).sort((a, b) => a[1] - b[1]);
+const LEN = Object.fromEntries(ORDER.map(([k, v], i) => [k, (ORDER[i + 1]?.[1] ?? DURATION) - v]));
+const out = (T, k) => [LEN[k] - .7, LEN[k]];   // fade-out window of a scene
+const fd = (T, a, b, k) => fade(T, a, b, ...out(T, k));
+function foot(s, T, k, t0 = 1, y = 1010) { text(s, 120, y, { size: 18, weight: 400, color: K.sub, a: fd(T, t0, t0 + .6, k), align: 'left' }); }
+
 function open(T) {
   bg(T);
-  headline('Every AI project should start', T, .3, 1.1, 6.3, 6.9, 330, 78);
-  headline('with a business case.', T, .6, 1.4, 6.3, 6.9, 420, 78, K.blue);
-  headline('Not with a model.', T, 1.8, 2.6, 6.3, 6.9, 520, 78, K.sub, 300);
-  const k = fade(T, 3, 3.8, 6.3, 6.9);
-  card(1180, 650, 620, 230, k);
-  text(`Supplier notice ${F.notice.id}`, 1210, 690, { size: 20, weight: 600, color: K.sub, a: k, align: 'left' });
-  text(F.notice.delay, 1210, 750, { size: 54, weight: 800, color: K.red, a: k, align: 'left', track: -1 });
-  text(F.notice.line, 1210, 805, { size: 22, weight: 500, a: k, align: 'left' });
-  text(`Pegged to ${F.notice.affected}`, 1210, 845, { size: 20, weight: 400, color: K.sub, a: k, align: 'left' });
+  headline('Every AI project should start', T, .3, 1.1, ...out(T, 'open'), 400, 84);
+  headline('with a business case.', T, .7, 1.5, ...out(T, 'open'), 500, 84, K.blue);
+  headline('Not with a model.', T, 2.2, 3, ...out(T, 'open'), 610, 84, K.sub, 300);
+}
+function company(T) {
+  bg(T); const k0 = 'company';
+  chapter('The company', T, .2, .8, ...out(T, k0));
+  headline(`${F.company.name} builds electric trainsets.`, T, .3, 1.1, ...out(T, k0), 200, 60);
+  headline('Every trainset is a contractual delivery date.', T, 1, 1.8, ...out(T, k0), 280, 44, K.sub, 400);
+  // the line: seven stations, trainsets flowing through
+  const st = F.company.stations, x0 = 120, sw = 232, gap = 10, y = 380;
+  st.forEach((s, i) => { const k = fd(T, 1.4 + i * .12, 2 + i * .12, k0), x = x0 + i * (sw + gap); card(x, y, sw, 150, k, { r: 14 }); text(s.id, x + 20, y + 36, { size: 24, weight: 800, color: K.blue, a: k, align: 'left' }); s.name.split(' & ').forEach((l, j, arr) => text(j < arr.length - 1 ? l + ' &' : l, x + 20, y + 82 + j * 30, { size: 20, weight: 500, color: K.sub, a: k, align: 'left' })); });
+  const kt = fd(T, 2.6, 3.2, k0);
+  for (let j = 0; j < 6; j++) { const pos = ((T * .09 + j / 6) % 1) * (st.length * (sw + gap) - 140); g.fillStyle = rgba(K.ink, kt * .9); g.beginPath(); g.roundRect(x0 + pos, y + 170, 120, 22, 11); g.fill(); g.fillStyle = rgba(K.white, kt); for (let w = 0; w < 4; w++) g.fillRect(x0 + pos + 14 + w * 26, y + 176, 16, 8); }
+  line(x0, y + 200, x0 + st.length * (sw + gap) - gap, y + 200, K.sub, kt * .5, 2);
+  const facts = [[F.company.trainsets, F.company.configurations.join('  ·  ')], [F.company.ld, 'contractual late-delivery damages'], [F.company.systems, `${F.company.records} that describe the line today`]];
+  facts.forEach(([big, small], i) => { const k = fd(T, 4 + i * .8, 4.6 + i * .8, k0), x = 120 + i * 570; card(x, 680, 540, 170, k); text(big, x + 30, 740, { size: big.length > 28 ? 27 : 32, weight: 800, a: k, align: 'left' }); text(small, x + 30, 795, { size: 20, weight: 400, color: K.sub, a: k, align: 'left' }); });
+  foot('NovaRail is a fictional manufacturer and all data is synthetic — the pattern is the same in any engineer-to-order industry.', T, k0, 6.5);
+}
+function notice(T) {
+  bg(T); const k0 = 'notice';
+  chapter('Monday morning', T, .2, .8, ...out(T, k0), K.red);
+  const k = fd(T, .5, 1.2, k0);
+  card(120, 190, 1000, 400, k, { stroke: K.red, lw: 2 });
+  text(`Supplier notice ${F.notice.id}`, 160, 250, { size: 24, weight: 600, color: K.sub, a: k, align: 'left' });
+  text(F.notice.delay, 160, 340, { size: 96, weight: 800, color: K.red, a: k, align: 'left', track: -3 });
+  text(F.notice.line, 160, 430, { size: 30, weight: 600, a: k, align: 'left' });
+  text(`Pegged to ${F.notice.affected} — ${F.notice.trainsets} on the line`, 160, 485, { size: 24, weight: 400, color: K.sub, a: k, align: 'left' });
+  text('Without them, electrical integration (S30) stops.', 160, 540, { size: 24, weight: 400, color: K.sub, a: k, align: 'left' });
+  const kq = fd(T, 3, 3.8, k0);
+  text('The question is a business question:', 120, 700, { size: 30, weight: 400, color: K.sub, a: kq, align: 'left' });
+  text('Can we keep the delivery dates without unacceptable', 120, 770, { size: 48, weight: 800, a: fd(T, 3.5, 4.3, k0), align: 'left', track: -1 });
+  text('cost, risk or engineering debt?', 120, 835, { size: 48, weight: 800, a: fd(T, 3.9, 4.7, k0), align: 'left', track: -1 });
 }
 function gate(T) {
-  bg(T);
-  chapter('Value gate', T, .2, .8, 9.3, 10);
-  headline('Value at stake decides whether AI runs.', T, .3, 1.1, 9.3, 10, 200, 60);
-  const cols = [{ x: 140, title: 'Same morning · routine notice', line: F.routine.line, stake: F.routine.atStake, verdict: 'Deterministic rules', sub: `No agent, no model call · AI cost ${F.routine.aiCost}`, col: K.sub, t0: 1.4 },
-                { x: 1000, title: `Notice ${F.notice.id}`, line: F.notice.delay + ' · 3 trainsets', stake: F.main.atStake, verdict: 'Agentic reasoning required', sub: F.main.model, col: K.blue, t0: 3 }];
-  for (const c of cols) {
-    const k = fade(T, c.t0, c.t0 + .7, 9.3, 10);
-    card(c.x, 320, 780, 560, k);
-    text(c.title, c.x + 40, 370, { size: 22, weight: 600, color: K.sub, a: k, align: 'left' });
-    text(c.line, c.x + 40, 415, { size: 28, weight: 600, a: k, align: 'left' });
-    text('At stake if nothing is done', c.x + 40, 500, { size: 20, weight: 500, color: K.sub, a: k * seg(T, c.t0 + .6, c.t0 + 1.2), align: 'left' });
-    text(c.stake, c.x + 40, 580, { size: 104, weight: 800, color: c.col === K.blue ? K.ink : K.sub, a: k * seg(T, c.t0 + .8, c.t0 + 1.4), align: 'left', track: -3 });
-    line(c.x + 40, 660, c.x + 740, 660, K.line, k, 1.5);
-    const kv = k * seg(T, c.t0 + 1.6, c.t0 + 2.2);
-    text(c.verdict, c.x + 40, 715, { size: 40, weight: 800, color: c.col, a: kv, align: 'left' });
-    text(c.sub, c.x + 40, 770, { size: 21, weight: 400, color: K.sub, a: kv, align: 'left' });
-  }
-  text('Computed by deterministic code before any model is involved.', W / 2, 960, { size: 24, weight: 400, color: K.sub, a: fade(T, 6.6, 7.2, 9.3, 10) });
+  bg(T); const k0 = 'gate';
+  chapter('Value gate', T, .2, .8, ...out(T, k0));
+  headline('Not every problem deserves AI.', T, .3, 1.1, ...out(T, k0), 200, 60);
+  // routine notice: realistic, quiet
+  let k = fd(T, 1.3, 2, k0);
+  card(120, 300, 760, 560, k);
+  text('Same morning · another supplier notice', 160, 350, { size: 22, weight: 600, color: K.sub, a: k, align: 'left' });
+  text(F.routine.line, 160, 400, { size: 30, weight: 700, a: k, align: 'left' });
+  const kr = k * seg(T, 2.2, 2.8);
+  text(F.routine.margin, 160, 480, { size: 26, weight: 500, a: kr, align: 'left' });
+  text(F.routine.impact, 160, 525, { size: 26, weight: 500, color: K.sub, a: kr, align: 'left' });
+  line(160, 600, 840, 600, K.line, k);
+  const kv = k * seg(T, 3, 3.6);
+  text('A rule handles it', 160, 660, { size: 40, weight: 800, color: K.teal, a: kv, align: 'left' });
+  text('update the receipt date · inform planning', 160, 715, { size: 22, weight: 400, color: K.sub, a: kv, align: 'left' });
+  text('no agent, no LLM call', 160, 755, { size: 22, weight: 400, color: K.sub, a: kv, align: 'left' });
+  // the inverter batch
+  k = fd(T, 4.2, 4.9, k0);
+  card(1000, 300, 800, 560, k, { stroke: K.blue, lw: 2 });
+  text(`Notice ${F.notice.id} · ${F.notice.delay}`, 1040, 350, { size: 22, weight: 600, color: K.sub, a: k, align: 'left' });
+  text('Exposure if nothing is done', 1040, 400, { size: 26, weight: 600, a: k, align: 'left' });
+  text(F.main.atStake, 1040, 485, { size: 96, weight: 800, a: k * seg(T, 4.8, 5.4), align: 'left', track: -3 });
+  F.main.lines.forEach((l, i) => text(`· ${l}`, 1040, 552 + i * 30, { size: 20, weight: 400, color: K.sub, a: k * seg(T, 5.2 + i * .2, 5.6 + i * .2), align: 'left' }));
+  line(1040, 690, 1760, 690, K.line, k);
+  const kw = k * seg(T, 6.4, 7);
+  text('Agentic reasoning is worth it', 1040, 745, { size: 40, weight: 800, color: K.blue, a: kw, align: 'left' });
+  text('cross-domain: supply · planning · cost · configuration', 1040, 795, { size: 22, weight: 400, color: K.sub, a: kw, align: 'left' });
+  foot(`Both verdicts come from deterministic cost formulas and a ${F.main.model.split(' · ')[0]} running in the browser — before any LLM is called.`, T, k0, 8, 950);
 }
-function ground(T) {
-  bg(T);
-  chapter('Grounding', T, .2, .7, 4.4, 5, K.teal);
-  const k = fade(T, .3, .9, 4.4, 5);
-  text(F.ground.raw, 520, 500, { size: 150, weight: 800, color: K.sub, a: k * (1 - seg(T, 2, 2.6) * .5), track: -5 });
-  text('enterprise records', 520, 610, { size: 26, weight: 500, color: K.sub, a: k });
-  const ka = seg(T, 1.2, 2);
-  line(820, 500, lerp(820, 1080, ka), 500, K.teal, k, 4); if (ka > .98) { g.fillStyle = rgba(K.teal, k); g.beginPath(); g.moveTo(1092, 500); g.lineTo(1072, 488); g.lineTo(1072, 512); g.fill(); }
-  text(F.ground.evidence, 1390, 500, { size: 150, weight: 800, color: K.teal, a: k * seg(T, 1.8, 2.4), track: -5 });
-  text('facts with their source', 1390, 610, { size: 26, weight: 500, color: K.teal, a: k * seg(T, 1.8, 2.4) });
-  text(`Gemini never sees the raw ERP — ${F.ground.pct} less context.`, W / 2, 790, { size: 36, weight: 700, a: fade(T, 2.6, 3.2, 4.4, 5) });
+function brute(T) {
+  bg(T); const k0 = 'brute', B = F.brute;
+  chapter('Brute force or curated?', T, .2, .8, ...out(T, k0), K.teal);
+  headline('Give the model everything — or only what matters?', T, .3, 1.1, ...out(T, k0), 200, 56);
+  const full = 1180, x = 120;
+  // brute force row
+  let k = fd(T, 1.2, 1.8, k0);
+  text('Brute force: every record, in every agent turn', x, 330, { size: 30, weight: 800, color: K.red, a: k, align: 'left' });
+  text(`${F.ground.raw} records · ${B.rawPerTurn} tokens per turn × ${B.turns} turns`, x, 375, { size: 22, weight: 400, color: K.sub, a: k, align: 'left' });
+  const pb = eio(seg(T, 1.8, 3.6)); g.fillStyle = rgba(K.red, k * .85); g.beginPath(); g.roundRect(x, 410, Math.max(8, full * pb), 56, 10); g.fill();
+  text(`${B.bruteTokens} tokens`, x + 24, 439, { size: 24, weight: 700, color: K.white, a: k * seg(T, 3.2, 3.6), align: 'left' });
+  text(B.bruteEur, 1800, 430, { size: 64, weight: 800, color: K.red, a: k * seg(T, 3.4, 4), align: 'right', track: -2 });
+  text('per decision', 1800, 480, { size: 20, weight: 500, color: K.sub, a: k * seg(T, 3.4, 4), align: 'right' });
+  // curated row
+  k = fd(T, 4.4, 5, k0);
+  text(`Curated by LeanAI: ${F.ground.evidence} evidence items, each with its source`, x, 580, { size: 30, weight: 800, color: K.teal, a: k, align: 'left' });
+  text(`${B.evidenceTokens} tokens of evidence · same ${B.turns} turns`, x, 625, { size: 22, weight: 400, color: K.sub, a: k, align: 'left' });
+  g.fillStyle = rgba(K.teal, k); g.beginPath(); g.roundRect(x, 660, Math.max(8, full * B.ratio * eio(seg(T, 5, 5.6))), 56, 6); g.fill();
+  text(`${B.curatedTokens} tokens`, x + 30, 689, { size: 24, weight: 700, color: K.teal, a: k * seg(T, 5.4, 5.8), align: 'left' });
+  text(B.curatedEur, 1800, 680, { size: 64, weight: 800, color: K.teal, a: k * seg(T, 5.6, 6.2), align: 'right', track: -2 });
+  text('per decision', 1800, 730, { size: 20, weight: 500, color: K.sub, a: k * seg(T, 5.6, 6.2), align: 'right' });
+  // takeaways
+  const kt = fd(T, 7.4, 8.1, k0);
+  text(`${B.factor} cheaper.`, x, 830, { size: 52, weight: 800, a: kt, align: 'left', track: -1 });
+  text(`And less noise: in brute force, the facts that matter are ${B.share} of what the model reads.`, x, 890, { size: 26, weight: 500, color: K.sub, a: fd(T, 8.6, 9.3, k0), align: 'left' });
+  foot(`Computed, not run · tokens ≈ characters ÷ 4 · brute force = the same ${B.turns} model turns, each also carrying the raw records · ${B.price}`, T, k0, 10);
+}
+function why(T) {
+  bg(T); const k0 = 'why';
+  chapter('Why Google’s agentic stack', T, .2, .8, ...out(T, k0));
+  headline('One stack from model to protocol — on open standards.', T, .3, 1.1, ...out(T, k0), 200, 54);
+  const rows = [
+    ['Gemini', K.blue, 'Structured JSON output · token usage reported on every call', 'every proposal can be checked by code, every decision has a measured cost'],
+    ['Agent Development Kit', K.blue, 'Open source (Apache-2.0) · agents defined in code', 'specialists are versioned, reviewed and tested like the rest of the software'],
+    ['A2A', K.violet, 'Open agent-to-agent protocol launched by Google, hosted by the Linux Foundation', 'specialists can be discovered and called across teams and vendors'],
+    ['MCP', K.teal, 'Supported natively by ADK (MCPToolset)', 'each enterprise system is exposed once and reused by every agent']
+  ];
+  rows.forEach(([name, col, what, why], i) => {
+    const k = fd(T, 1.2 + i * 1.3, 1.9 + i * 1.3, k0), y = 300 + i * 160;
+    card(120, y, 1680, 136, k);
+    g.fillStyle = rgba(col, k); g.fillRect(120, y, 6, 136);
+    text(name, 160, y + 68, { size: 32, weight: 800, color: col, a: k, align: 'left' });
+    text(what, 640, y + 48, { size: 24, weight: 600, a: k, align: 'left' });
+    text(`→ ${why}`, 640, y + 92, { size: 22, weight: 400, color: K.sub, a: k * seg(T, 1.6 + i * 1.3, 2.3 + i * 1.3), align: 'left' });
+  });
+  foot('Licences from the published npm packages (@google/adk, @google/genai, @a2a-js/sdk: Apache-2.0) · A2A governance: Google Developers Blog, June 2025.', T, k0, 7.5);
 }
 function adk(T) {
   bg(T);
-  chapter('Google Agent Development Kit', T, .2, .8, 6.3, 7);
-  headline('Four specialists, defined in code with ADK.', T, .3, 1.1, 6.3, 7, 200, 56);
-  codeBlock(CODE, 120, 300, 1020, fade(T, .8, 1.4, 6.3, 7), eio(seg(T, 1, 4.2)));
-  F.agents.forEach((a, i) => { const k = fade(T, 1.6 + i * .5, 2.2 + i * .5, 6.3, 7), y = 300 + i * 132; card(1220, y, 580, 112, k); text(a.name, 1250, y + 40, { size: 26, weight: 700, color: K.blue, a: k, align: 'left', font: 'mono' }); text(`Gemini · ${a.tools.length} MCP tools`, 1250, y + 80, { size: 20, weight: 500, color: K.sub, a: k, align: 'left' }); });
-  text(`@google/adk ${F.packages['@google/adk']} · model ${F.model}`, 120, 920, { size: 20, weight: 500, color: K.sub, a: fade(T, 4.4, 5, 6.3, 7), align: 'left' });
+  chapter('Google Agent Development Kit', T, .2, .8, ...out(T, 'adk'));
+  headline('Four specialists, defined in code with ADK.', T, .3, 1.1, ...out(T, 'adk'), 200, 56);
+  codeBlock(CODE, 120, 300, 1020, fade(T, .8, 1.4, ...out(T, 'adk')), eio(seg(T, 1, 4.2)));
+  F.agents.forEach((a, i) => { const k = fade(T, 1.6 + i * .5, 2.2 + i * .5, ...out(T, 'adk')), y = 300 + i * 132; card(1220, y, 580, 112, k); text(a.name, 1250, y + 40, { size: 26, weight: 700, color: K.blue, a: k, align: 'left', font: 'mono' }); text(`Gemini · ${a.tools.length} MCP tools`, 1250, y + 80, { size: 20, weight: 500, color: K.sub, a: k, align: 'left' }); });
+  text(`@google/adk ${F.packages['@google/adk']} · model ${F.model}`, 120, 920, { size: 20, weight: 500, color: K.sub, a: fade(T, 4.4, 5, ...out(T, 'adk')), align: 'left' });
 }
 function a2a(T) {
   bg(T);
-  chapter('A2A · agent to agent', T, .2, .8, 7.3, 8, K.violet);
-  headline('Each specialist publishes an agent card.', T, .3, 1.1, 7.3, 8, 200, 56);
+  chapter('A2A · agent to agent', T, .2, .8, ...out(T, 'a2a'), K.violet);
+  headline('Each specialist publishes an agent card.', T, .3, 1.1, ...out(T, 'a2a'), 200, 56);
   const hub = [360, 600];
-  const kh = fade(T, .8, 1.4, 7.3, 8);
+  const kh = fade(T, .8, 1.4, ...out(T, 'a2a'));
   card(hub[0] - 170, hub[1] - 60, 340, 120, kh, { stroke: K.ink, lw: 2 });
   text('LeanAI orchestrator', hub[0], hub[1] - 12, { size: 26, weight: 800, a: kh }); text('deterministic code', hub[0], hub[1] + 26, { size: 19, weight: 500, color: K.sub, a: kh });
   F.agents.forEach((a, i) => {
-    const k = fade(T, 1.2 + i * .45, 1.8 + i * .45, 7.3, 8), x = 760, y = 290 + i * 160, w = 1040, h = 132;
+    const k = fade(T, 1.2 + i * .45, 1.8 + i * .45, ...out(T, 'a2a')), x = 760, y = 290 + i * 160, w = 1040, h = 132;
     const p = eio(seg(T, 1.4 + i * .45, 2.2 + i * .45));
     line(hub[0] + 170, hub[1], lerp(hub[0] + 170, x, p), lerp(hub[1], y + h / 2, p), K.violet, .7 * k, 2.5);
     const dot = (T * .5 + i * .25) % 1; g.fillStyle = rgba(K.violet, k * seg(T, 3, 3.6)); g.beginPath(); g.arc(lerp(hub[0] + 170, x, dot), lerp(hub[1], y + h / 2, dot), 7, 0, 6.283); g.fill();
@@ -137,62 +212,70 @@ function a2a(T) {
     text(`"protocolVersion": "${a.protocol}"   "preferredTransport": "${a.transport}"`, x + 30, y + 72, { size: 19, weight: 400, color: K.sub, a: k, align: 'left', font: 'mono' });
     text(`skills: ${a.tools.join(', ')}`, x + 30, y + 106, { size: 19, weight: 400, color: K.ink, a: k, align: 'left', font: 'mono' });
   });
-  text('Served by ADK toA2a · reached with the official A2A client · real cards recorded from the running agents', 120, 960, { size: 20, weight: 500, color: K.sub, a: fade(T, 4, 4.6, 7.3, 8), align: 'left' });
+  text('Served by ADK toA2a · reached with the official A2A client · real cards recorded from the running agents', 120, 960, { size: 20, weight: 500, color: K.sub, a: fade(T, 4, 4.6, ...out(T, 'a2a')), align: 'left' });
 }
 function mcp(T) {
   bg(T);
-  chapter('MCP · agent to enterprise system', T, .2, .8, 7.3, 8, K.teal);
-  headline('Facts come from systems, through MCP.', T, .3, 1.1, 7.3, 8, 200, 56);
+  chapter('MCP · agent to enterprise system', T, .2, .8, ...out(T, 'mcp'), K.teal);
+  headline('Facts come from systems, through MCP.', T, .3, 1.1, ...out(T, 'mcp'), 200, 56);
   const systems = [...new Set(F.tools.map(t => t.system))];
   systems.forEach((sname, i) => {
-    const k = fade(T, .8 + i * .25, 1.4 + i * .25, 7.3, 8), x = 120 + (i % 3) * 300, y = 300 + Math.floor(i / 3) * 250, col = SYS_COL[sname] ?? K.teal;
+    const k = fade(T, .8 + i * .25, 1.4 + i * .25, ...out(T, 'mcp')), x = 120 + (i % 3) * 300, y = 300 + Math.floor(i / 3) * 250, col = SYS_COL[sname] ?? K.teal;
     card(x, y, 270, 210, k);
     text(sname, x + 24, y + 40, { size: 24, weight: 800, color: col, a: k, align: 'left' });
     F.tools.filter(t => t.system === sname).forEach((t, j) => text(t.name, x + 24, y + 90 + j * 36, { size: 19, weight: 400, a: k, align: 'left', font: 'mono' }));
   });
   // a real call and its real answer
-  const kc = fade(T, 3, 3.6, 7.3, 8), s = F.sample;
+  const kc = fade(T, 3, 3.6, ...out(T, 'mcp')), s = F.sample;
   codeBlock([`→ tools/call ${s.tool}`, `  ${JSON.stringify(s.arguments)}`, `← status: "${s.structuredContent.status}"`, `  baseline: "${s.structuredContent.baseline}"`], 1060, 300, 740, kc, eio(seg(T, 3.2, 5.4)));
   text('Read-only tools · typed inputs · the same server every agent uses', 1060, 620, { size: 21, weight: 500, color: K.sub, a: kc, align: 'left' });
   text(`@modelcontextprotocol/sdk ${F.packages['@modelcontextprotocol/sdk']} · ${F.tools.length} tools`, 1060, 660, { size: 20, weight: 500, color: K.sub, a: kc, align: 'left' });
 }
 function contract(T) {
   bg(T);
-  chapter('Gemini, under contract', T, .2, .8, 6.3, 7);
-  headline('Gemini returns JSON. Code checks it.', T, .3, 1.1, 6.3, 7, 200, 56);
+  chapter('Gemini, under contract', T, .2, .8, ...out(T, 'contract'));
+  headline('Gemini returns JSON. Code checks it.', T, .3, 1.1, ...out(T, 'contract'), 200, 56);
   const steps = [['Gemini proposes', 'structured JSON|per specialist', K.blue], ['Contract check', 'required keys and types|or the run stops', K.ink], ['Deterministic validation', 'stock, dates, capacity,|configuration', K.teal], ['Usage measured', 'tokens from usageMetadata|→ € per decision', K.green]];
-  steps.forEach(([a, b, col], i) => { const k = fade(T, .8 + i * .6, 1.4 + i * .6, 6.3, 7), x = 120 + i * 435; card(x, 340, 405, 220, k); g.fillStyle = rgba(col, k); g.fillRect(x, 340, 6, 220); text(a, x + 34, 410, { size: a.length > 20 ? 27 : 30, weight: 800, color: col, a: k, align: 'left' }); b.split('|').forEach((l, j) => text(l, x + 34, 468 + j * 32, { size: 21, weight: 400, color: K.sub, a: k, align: 'left' })); });
-  text('Models are replaceable.', 120, 700, { size: 52, weight: 300, a: fade(T, 3.6, 4.2, 6.3, 7), align: 'left' });
-  text('The business architecture is not.', 120, 770, { size: 52, weight: 800, a: fade(T, 4.1, 4.7, 6.3, 7), align: 'left' });
-  text(`This run: ${F.ai.calls} model turns · ${F.ai.tools} MCP calls · ${F.ai.messages} A2A messages${F.ai.estimated ? ' · deterministic replay, tokens estimated' : ''}`, 120, 900, { size: 21, weight: 500, color: K.sub, a: fade(T, 4.6, 5.2, 6.3, 7), align: 'left' });
+  steps.forEach(([a, b, col], i) => { const k = fade(T, .8 + i * .6, 1.4 + i * .6, ...out(T, 'contract')), x = 120 + i * 435; card(x, 340, 405, 220, k); g.fillStyle = rgba(col, k); g.fillRect(x, 340, 6, 220); text(a, x + 34, 410, { size: a.length > 20 ? 27 : 30, weight: 800, color: col, a: k, align: 'left' }); b.split('|').forEach((l, j) => text(l, x + 34, 468 + j * 32, { size: 21, weight: 400, color: K.sub, a: k, align: 'left' })); });
+  text('Models are replaceable.', 120, 700, { size: 52, weight: 300, a: fade(T, 3.6, 4.2, ...out(T, 'contract')), align: 'left' });
+  text('The business architecture is not.', 120, 770, { size: 52, weight: 800, a: fade(T, 4.1, 4.7, ...out(T, 'contract')), align: 'left' });
+  text(`This run: ${F.ai.calls} model turns · ${F.ai.tools} MCP calls · ${F.ai.messages} A2A messages${F.ai.estimated ? ' · deterministic replay, tokens estimated' : ''}`, 120, 900, { size: 21, weight: 500, color: K.sub, a: fade(T, 4.6, 5.2, ...out(T, 'contract')), align: 'left' });
 }
-function outcome(T) {
-  bg(T);
-  chapter('Business outcome', T, .2, .8, 9.3, 10, K.green);
-  headline('Delivery commitment protected.', T, .3, 1.1, 9.3, 10, 200, 60);
-  F.plan.forEach((p, i) => { const k = fade(T, .8 + i * .3, 1.4 + i * .3, 9.3, 10), x = 120 + i * 300; card(x, 300, 270, 96, k); text(p.trainset, x + 24, 335, { size: 26, weight: 800, a: k, align: 'left' }); text({ CONTINUE: 'continue', ALLOCATE_STOCK: 'existing stock', RESEQUENCE_AND_SLACK: 'resequence + slack' }[p.kind], x + 24, 370, { size: 19, weight: 500, color: K.green, a: k, align: 'left' }); });
-  const kv = fade(T, 2, 2.8, 9.3, 10);
-  text(F.values.protected, 120, 560, { size: 170, weight: 800, color: K.green, a: kv, align: 'left', track: -6 });
-  text('value protected by the proposed recovery', 130, 670, { size: 26, weight: 600, color: K.green, a: kv, align: 'left' });
-  text(`exposure ${F.values.exposure} − recovery ${F.values.cost} − residual ${F.values.residual}`, 130, 715, { size: 22, weight: 400, color: K.sub, a: kv, align: 'left' });
-  const ka = fade(T, 4, 4.8, 9.3, 10);
-  card(1180, 470, 620, 300, ka);
-  text('AI cost of the decision', 1215, 520, { size: 22, weight: 600, color: K.sub, a: ka, align: 'left' });
-  text(F.ai.cost, 1215, 600, { size: 90, weight: 800, a: ka, align: 'left', track: -3 });
-  text(`≈ ${F.perEuro} € protected per € of AI`, 1215, 680, { size: 26, weight: 700, color: K.blue, a: ka * seg(T, 5, 5.6), align: 'left' });
-  text(F.ai.estimated ? 'estimated tokens × Flash-tier list price' : 'measured tokens × list price', 1215, 725, { size: 18, weight: 400, color: K.sub, a: ka, align: 'left' });
-  text('The value comes from the plan people approve — not from the AI.', 120, 900, { size: 28, weight: 600, a: fade(T, 6.2, 6.9, 9.3, 10), align: 'left' });
+function savings(T) {
+  bg(T); const k0 = 'savings', B = F.brute;
+  chapter('What it saves', T, .2, .8, ...out(T, k0), K.green);
+  headline('Where the money really is.', T, .3, 1.1, ...out(T, k0), 200, 60);
+  F.plan.forEach((p, i) => { const k = fd(T, .8 + i * .3, 1.4 + i * .3, k0), x = 120 + i * 300; card(x, 280, 270, 90, k); text(p.trainset, x + 24, 312, { size: 26, weight: 800, a: k, align: 'left' }); text({ CONTINUE: 'continue', ALLOCATE_STOCK: 'existing stock', RESEQUENCE_AND_SLACK: 'resequence + slack' }[p.kind] ?? p.kind, x + 24, 346, { size: 19, weight: 500, color: K.green, a: k, align: 'left' }); });
+  text('every delivery date held', 1060, 325, { size: 24, weight: 600, color: K.green, a: fd(T, 1.8, 2.4, k0), align: 'left' });
+  // row 1: versus doing nothing
+  let k = fd(T, 2.4, 3.1, k0);
+  card(120, 420, 1680, 200, k);
+  text('Versus doing nothing', 160, 470, { size: 24, weight: 700, color: K.sub, a: k, align: 'left' });
+  text(F.values.protected, 160, 555, { size: 96, weight: 800, color: K.green, a: k * seg(T, 2.8, 3.4), align: 'left', track: -3 });
+  text('value protected by the recovery plan', 760, 525, { size: 26, weight: 600, color: K.green, a: k * seg(T, 3.2, 3.8), align: 'left' });
+  text(`exposure ${F.values.exposure} − recovery cost ${F.values.cost} − residual ${F.values.residual}`, 760, 570, { size: 22, weight: 400, color: K.sub, a: k * seg(T, 3.2, 3.8), align: 'left' });
+  // row 2: versus brute-force AI
+  k = fd(T, 4.6, 5.3, k0);
+  card(120, 650, 1680, 170, k);
+  text('Versus brute-force AI', 160, 700, { size: 24, weight: 700, color: K.sub, a: k, align: 'left' });
+  text(`${B.bruteEur} → ${B.curatedEur}`, 160, 765, { size: 56, weight: 800, a: k * seg(T, 5, 5.6), align: 'left', track: -1.5 });
+  text(`per decision · ${B.savedPct} less AI spend`, 760, 740, { size: 26, weight: 600, color: K.blue, a: k * seg(T, 5.4, 6), align: 'left' });
+  text(`over 1,000 decisions of this size: ${B.per1000.brute} → ${B.per1000.curated}`, 760, 785, { size: 22, weight: 400, color: K.sub, a: k * seg(T, 5.4, 6), align: 'left' });
+  // punchline
+  text('Curation cuts the AI bill. But the AI bill was never the point —', 120, 885, { size: 30, weight: 600, a: fd(T, 7.2, 7.9, k0), align: 'left' });
+  text(`the decision is: ≈ ${F.perEuro} € protected per € of AI.`, 120, 935, { size: 30, weight: 800, color: K.green, a: fd(T, 7.8, 8.5, k0), align: 'left' });
+  foot(`AI cost: ${F.ai.estimated ? 'estimated tokens of a deterministic replay' : 'measured tokens'} × Flash-tier list price · business figures from the scenario's cost formulas.`, T, k0, 9, 1020);
 }
 function twist(T) {
   bg(T);
-  const k = fade(T, .2, .8, 8.3, 9);
+  const k = fade(T, .2, .8, ...out(T, 'twist'));
   card(120, 170, 1680, 300, k, { stroke: K.red, lw: 3 });
   text('Configuration conflict', 170, 250, { size: 64, weight: 800, color: K.red, a: k, align: 'left', track: -1 });
   if (F.conflict) text(`The stock found for ${F.conflict.trainset} is validated for another configuration — caught by the MCP tool checkConfiguration.`, 170, 330, { size: 26, weight: 500, a: k, align: 'left' });
   text('Agents stop. They cannot authorise a deviation.', 170, 400, { size: 26, weight: 400, color: K.sub, a: k, align: 'left' });
   const st = [['Gemini proposed', K.blue], ['Engineering review', K.red], ['Engineering validated', K.teal], ['Human approved', K.ink]];
-  st.forEach(([s, col], i) => { const kk = fade(T, 1.8 + i * .7, 2.4 + i * .7, 8.3, 9), x = 120 + i * 435; card(x, 560, 405, 110, kk, { stroke: col, lw: 2 }); text(s, x + 202, 615, { size: 30, weight: 800, color: col, a: kk }); if (i < 3) line(x + 410, 615, x + 430, 615, K.sub, kk, 2); });
-  text('Gemini proposes. Engineering validates. Humans decide.', W / 2, 820, { size: 44, weight: 800, a: fade(T, 5, 5.7, 8.3, 9) });
+  st.forEach(([s, col], i) => { const kk = fade(T, 1.8 + i * .7, 2.4 + i * .7, ...out(T, 'twist')), x = 120 + i * 435; card(x, 560, 405, 110, kk, { stroke: col, lw: 2 }); text(s, x + 202, 615, { size: 30, weight: 800, color: col, a: kk }); if (i < 3) line(x + 410, 615, x + 430, 615, K.sub, kk, 2); });
+  text('Gemini proposes. Engineering validates. Humans decide.', W / 2, 820, { size: 44, weight: 800, a: fade(T, 5, 5.7, ...out(T, 'twist')) });
 }
 function end(T) {
   bg(T);
@@ -213,7 +296,7 @@ function render(t) {
   let cur = order[0];
   for (const o of order) if (t >= o[1]) cur = o;
   const T = t - cur[1];
-  ({ open, gate, ground, adk, a2a, mcp, contract, outcome, twist, end })[cur[0]](T);
+  ({ open, company, notice, gate, brute, why, adk, a2a, mcp, contract, savings, twist, end })[cur[0]](T);
   const fo = seg(t, DURATION - 1.2, DURATION), fi = 1 - seg(t, 0, .5);
   if (fo + fi > 0) { g.fillStyle = `rgba(244,246,249,${Math.max(fo, fi)})`; g.fillRect(0, 0, W, H); }
 }

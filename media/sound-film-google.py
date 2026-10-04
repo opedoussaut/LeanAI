@@ -1,7 +1,7 @@
 # Original synthesized soundtrack for the second film, "Value first — built on Google's agentic stack" (no third-party music).
-# Lighter and more digital than the first film: a quiet question (business case) → a decisive hit at the value gate →
-# a clean plucked arpeggio that builds through ADK, A2A and MCP → a lift on the business outcome → a hush at the
-# configuration conflict → resolution on "Value first".
+# Lighter and more digital than the first film: a quiet question (business case) and company → a dark hit on the notice →
+# decisive hits at the value gate and the brute-force comparison → a plucked arpeggio that builds through the Google
+# stack → a lift on the savings → a hush at the configuration conflict → resolution on "Value first".
 # Scene times are read from GOOGLE_SCENES in src/scenarios/rail/film.js so the music stays aligned with the picture.
 # Usage: python3 media/sound-film-google.py out.wav
 import re, sys, os, wave, numpy as np
@@ -26,18 +26,14 @@ def pad(a, b, freqs, g=1.0):
     add(max(0, a - .5), lp(s, 2600) * env(n, .9, 1.0) * g)
 # harmony: D major colour, Bm for the conflict
 Dmaj = [73.4, 146.8, 220, 293.7, 370]; G = [98, 196, 293.7, 392, 493.9]; A = [110, 220, 329.6, 440, 554.4]; Bm = [61.7, 123.5, 185, 246.9, 293.7]
-pad(0, SC['gate'], [73.4, 146.8, 220, 329.6], .7)
-pad(SC['gate'], SC['ground'], Dmaj, .85)
-pad(SC['ground'], SC['a2a'], G, .9)
-pad(SC['a2a'], SC['contract'], A, .9)
-pad(SC['contract'], SC['outcome'], Dmaj, .95)
-pad(SC['outcome'], SC['twist'], G + [587.3], 1.1)
-pad(SC['twist'], SC['end'], Bm, .75)
-pad(SC['end'], D, Dmaj + [440], 1.05)
+SEQ = [('open', [73.4, 146.8, 220, 329.6, 440], .7), ('company', Dmaj, .8), ('notice', Bm, .85), ('gate', Dmaj, .85), ('brute', G, .9), ('why', A, .9),
+       ('adk', Dmaj, .95), ('a2a', G, .95), ('mcp', A, .95), ('contract', Dmaj, .95), ('savings', G + [587.3], 1.1), ('twist', Bm, .75), ('end', Dmaj + [440], 1.05)]
+for i, (k, ch, gn) in enumerate(SEQ): pad(SC[k], SC[SEQ[i + 1][0]] if i + 1 < len(SEQ) else D, ch, gn)
 def chord_at(x):
-    for k, ch in (('end', Dmaj), ('twist', Bm), ('outcome', G), ('contract', Dmaj), ('a2a', A), ('ground', G), ('gate', Dmaj)):
-        if x >= SC[k]: return ch
-    return Dmaj
+    cur = SEQ[0][1]
+    for k, ch, _ in SEQ:
+        if x >= SC[k]: cur = ch
+    return cur
 def pluck(tc, f, g=.04, pan=0.0, dec=7.0):
     n = int(.6 * SR); tt = np.arange(n) / SR
     s = (np.sin(2 * np.pi * f * tt) + .4 * np.sin(2 * np.pi * 2 * f * tt) + .15 * np.sin(2 * np.pi * 3 * f * tt)) * np.exp(-tt * dec)
@@ -50,27 +46,31 @@ while x < D - 3:
     if SC['twist'] <= x < SC['twist'] + 4: x += step; i += 1; continue
     ch = chord_at(x); notes = [ch[2], ch[3], ch[4], ch[3] * 2 if ch[3] * 2 < 1200 else ch[3]]
     if x < SC['gate']: dense = i % 8 == 0
-    elif x < SC['adk']: dense = i % 4 == 0
-    elif x < SC['outcome']: dense = True
+    elif x < SC['why']: dense = i % 4 == 0
+    elif x < SC['savings']: dense = True
     elif x < SC['twist']: dense = i % 2 == 0
     elif x < SC['end']: dense = i % 4 == 0
     else: dense = i % 8 == 0
     if dense:
-        lift = 1 + .5 * (SC['adk'] <= x < SC['outcome']) * min(1, (x - SC['adk']) / (SC['contract'] - SC['adk']))
+        lift = 1 + .5 * (SC['why'] <= x < SC['savings']) * min(1, (x - SC['why']) / (SC['contract'] - SC['why']))
         pluck(x, notes[i % 4], .028 * lift, .45 * np.sin(i * .7))
-    if SC['gate'] <= x < SC['twist'] and i % 4 == 0: kick(x, .2 if x >= SC['adk'] else .14)
-    if SC['adk'] <= x < SC['twist'] and i % 4 == 2: tick(x, .025, .3)
+    if SC['gate'] <= x < SC['twist'] and i % 4 == 0: kick(x, .2 if x >= SC['why'] else .14)
+    if SC['why'] <= x < SC['twist'] and i % 4 == 2: tick(x, .025, .3)
     x += step; i += 1
 # accents
 def riser(t_end, dur=1.5, g=.06): n = int(dur * SR); i0 = int((t_end - dur) * SR); add(t_end - dur, hp(noise[i0:i0 + n], 1200) * np.linspace(0, 1, n) ** 2.2 * g)
 def hit(tc, f=49, g=.3): n = int(2.4 * SR); tt = np.arange(n) / SR; add(tc, (np.sin(2 * np.pi * f * tt) + .3 * lp(noise[:n], 900) * np.exp(-tt * 18)) * np.exp(-tt * 2.6) * g)
 def bell(tc, f, g=.05, dec=2.0, pan=0): n = int(3 * SR); tt = np.arange(n) / SR; add(tc, (np.sin(2 * np.pi * f * tt) + .3 * np.sin(2 * np.pi * f * 2.01 * tt)) * np.exp(-tt * dec) * g, pan)
 bell(1.0, 587.3, .035); bell(3.6, 440, .03)
-riser(SC['gate'] + 3.2); hit(SC['gate'] + 3.2, 36.7, .32); bell(SC['gate'] + 3.3, 740, .04)
-bell(SC['ground'] + 2.2, 880, .04)
+bell(SC['company'] + .4, 659.3, .035)
+hit(SC['notice'] + .5, 36.7, .3); bell(SC['notice'] + .55, 246.9, .04)
+riser(SC['gate'] + 5.2); hit(SC['gate'] + 5.2, 41, .28); bell(SC['gate'] + 7.2, 740, .04)
+riser(SC['brute'] + 3.4); hit(SC['brute'] + 3.4, 36.7, .26); bell(SC['brute'] + 5.6, 880, .045); bell(SC['brute'] + 7.6, 1174.7, .04)
+for j in range(4): bell(SC['why'] + 1.3 + j * 1.3, (587.3, 659.3, 740, 880)[j], .035, 2.2)
 for k, f in (('adk', 587.3), ('a2a', 659.3), ('mcp', 740), ('contract', 880)): bell(SC[k] + .3, f, .04, 2.4)
-riser(SC['outcome'] + 1.2); hit(SC['outcome'] + 1.2, 49, .3)
-for j, f in enumerate((587.3, 740, 880, 1174.7)): bell(SC['outcome'] + 1.3 + j * .14, f, .035, 1.6)
+riser(SC['savings'] + 2.8); hit(SC['savings'] + 2.8, 49, .3)
+for j, f in enumerate((587.3, 740, 880, 1174.7)): bell(SC['savings'] + 2.9 + j * .14, f, .035, 1.6)
+bell(SC['savings'] + 5.2, 880, .04); bell(SC['savings'] + 7.9, 1174.7, .04)
 hit(SC['twist'] + .3, 30.9, .4); bell(SC['twist'] + .35, 246.9, .05, 1.2)
 for j, f in enumerate((370, 440, 587.3, 740)): bell(SC['twist'] + 5 + j * .9, f, .04)
 riser(SC['end'] + .9); hit(SC['end'] + .9, 36.7, .28)

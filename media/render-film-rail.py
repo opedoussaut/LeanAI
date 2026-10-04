@@ -8,7 +8,7 @@ FPS = 30
 HERE = os.path.dirname(os.path.abspath(__file__))
 FILMS = {  # name → (page, frame cache, output, soundtrack script, poster time in s)
     'recovery': ('film-rail.html', '.frames-rail', 'leanai-industrial-recovery-75s.mp4', 'sound-film-rail.py', 79),
-    'google': ('film-google.html', '.frames-google', 'leanai-google-agentic-stack-80s.mp4', 'sound-film-google.py', 57),
+    'google': ('film-google.html', '.frames-google', 'leanai-value-first-google-agentic-stack.mp4', 'sound-film-google.py', 110),
 }
 FILM = sys.argv[2] if len(sys.argv) > 2 else 'recovery'
 PAGE, FR, OUTNAME, SOUND, POSTER = FILMS[FILM]
