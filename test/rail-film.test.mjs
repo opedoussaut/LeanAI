@@ -5,7 +5,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { railStory } from '../src/scenarios/rail/facts.js';
-import { filmFacts, SCENES, DURATION } from '../src/scenarios/rail/film.js';
+import { filmFacts, SCENES, DURATION, googleFilmFacts, GOOGLE_SCENES, GOOGLE_DURATION } from '../src/scenarios/rail/film.js';
 import { generateRailDataset } from '../src/scenarios/rail/dataset.js';
 import { DemoEngine } from '../src/engine/engine.js';
 import { scenario } from '../src/scenarios/ai-factory/scenario.js';
@@ -52,9 +52,42 @@ test('film: timing is a 60–90 s storyboard in order, and the renderer targets 
   assert.match(r, /leanai-industrial-recovery-75s\.mp4/);
 });
 
+// Second film — value first, built on Google's agentic stack.
+const stack = () => JSON.parse(readFileSync(join(ROOT, 'evidence/google/stack.json'), 'utf8'));
+
+test('google film: figures come from the story, the stack from the recorded agent cards and MCP tool list', async () => {
+  const s = await railStory(), st = stack(), f = googleFilmFacts(s, st);
+  assert.equal(f.main.atStake, kEur(s.economics.exposure));
+  assert.equal(f.values.protected, kEur(s.economics.valueProtected));
+  assert.equal(f.ai.cost, `€${s.ai.costEur.toFixed(2)}`);
+  assert.equal(f.routine.path, 'DIRECT');
+  assert.equal(f.main.path, 'AGENTIC');
+  assert.ok(s.decide.routine.exposure < s.economics.exposure);
+  assert.deepEqual(f.agents.map(a => a.name), ['novarail_supply', 'novarail_planning', 'novarail_cost', 'novarail_configuration']);
+  assert.equal(f.tools.length, st.mcp.tools.length);
+  assert.ok(f.tools.every(t => t.system), 'every MCP tool names its enterprise system');
+  assert.equal(f.sample.structuredContent.status, 'NOT_APPROVED');
+  for (const k of ['@google/adk', '@google/genai', '@a2a-js/sdk', '@modelcontextprotocol/sdk']) assert.ok(st.packages[k], k);
+});
+
+test('google film: types no figure in, reads the shared story and the real ADK code, says the run is replayed', async () => {
+  const html = readFileSync(join(ROOT, 'media/film-google.html'), 'utf8');
+  assert.match(html, /from '\.\.\/src\/scenarios\/rail\/facts\.js'/);
+  assert.match(html, /evidence\/google\/stack\.json/);
+  assert.match(html, /src\/providers\/gemini-adk\.mjs/);
+  assert.match(html, /replayed deterministically/);
+  const f = googleFilmFacts(await railStory(), stack());
+  for (const literal of [f.main.atStake, f.values.protected, f.values.cost, f.ai.cost, f.ground.raw, f.perEuro, f.notice.delay]) assert.ok(!html.includes(literal), `film hard-codes "${literal}"`);
+  assert.ok(GOOGLE_DURATION >= 60 && GOOGLE_DURATION <= 90);
+  const t = Object.values(GOOGLE_SCENES);
+  assert.deepEqual(t, [...t].sort((a, b) => a - b));
+  assert.ok(t.at(-1) < GOOGLE_DURATION);
+  assert.match(readFileSync(join(ROOT, 'media/render-film-rail.py'), 'utf8'), /leanai-google-agentic-stack-80s\.mp4/);
+});
+
 test('positioning: no aerospace or real-manufacturer reference anywhere in the repository', () => {
   const banned = /\b(airbus|boeing|aerospace|aircraft|airlines?|aviation|A220|A320|A350|alstom|siemens mobility|hitachi rail|stadler)\b/i;
-  const skip = /^(\.git|node_modules|vendor|dist|evidence)$|\.(png|jpg|mp4|onnx|woff2|wav)$/;
+  const skip = /^(\.git|node_modules|vendor|dist|\.frames-\w+)$|\.(png|jpg|mp4|onnx|woff2|wav)$/;
   const hits = [];
   const walk = dir => { for (const n of readdirSync(dir)) { if (skip.test(n)) continue; const p = join(dir, n); if (statSync(p).isDirectory()) walk(p); else if (banned.test(readFileSync(p, 'utf8'))) hits.push(p.slice(ROOT.length)); } };
   walk(ROOT);

@@ -1,6 +1,8 @@
 // Industrial Recovery film.
 //   npm run film:preview   → serves the repository and prints the URL of the film route (plays in real time)
 //   npm run film           → renders media/leanai-industrial-recovery-75s.mp4 (1920×1080, 30 fps, original soundtrack)
+//   npm run film:google    → renders media/leanai-google-agentic-stack-80s.mp4 (value first, built on Google's agentic stack)
+//   add --google to the preview for the second film
 // Rendering needs Python with Playwright (Chromium), numpy/scipy and ffmpeg. The film reads the same scenario data as
 // the page (src/scenarios/rail/facts.js); nothing numeric is typed into the film.
 import { createServer } from 'node:http';
@@ -19,10 +21,11 @@ const server = createServer(async (req, res) => {
   res.writeHead(404).end();
 });
 await new Promise(r => server.listen(PORT, '127.0.0.1', r));
-const url = `http://127.0.0.1:${PORT}/media/film-rail.html`;
+const film = process.argv.includes('--google') ? 'google' : 'recovery';
+const url = `http://127.0.0.1:${PORT}/media/${film === 'google' ? 'film-google.html' : 'film-rail.html'}`;
 if (process.argv.includes('--preview')) {
   console.log(`Film preview: ${url}\n(plays in real time; Ctrl+C to stop)`);
 } else {
-  const p = spawn('python3', [join(ROOT, 'media', 'render-film-rail.py'), `${url}?render=1`], { stdio: 'inherit' });
+  const p = spawn('python3', [join(ROOT, 'media', 'render-film-rail.py'), `${url}?render=1`, film], { stdio: 'inherit' });
   p.on('exit', code => { server.close(); process.exit(code ?? 1); });
 }

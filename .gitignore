@@ -7,4 +7,4 @@ dist/
 media/silent-*.mp4
 media/sound-*.wav
 __pycache__/
-media/.frames-rail/
+media/.frames-*/

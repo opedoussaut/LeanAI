@@ -1,0 +1,354 @@
+{
+  "recordedAt": "2026-10-04T06:20:20.544Z",
+  "note": "Recorded without a Gemini API key: no model call was made. Tool list and agent cards are the real responses of the servers.",
+  "packages": {
+    "@google/adk": "2.2.0",
+    "@google/genai": "2.27.0",
+    "@a2a-js/sdk": "1.3.0",
+    "@modelcontextprotocol/sdk": "1.32.0"
+  },
+  "model": "gemini-flash-latest",
+  "mcp": {
+    "server": "novarail-enterprise-systems",
+    "transport": "Streamable HTTP",
+    "tools": [
+      {
+        "name": "getDisruption",
+        "description": "[ERP] Supplier notice and the purchase-order line it changes, with pegging.",
+        "required": []
+      },
+      {
+        "name": "getTrainsetStatus",
+        "description": "[MES] Configuration, S30 slot, kit status and operations that need the delayed part for one trainset.",
+        "required": [
+          "trainset"
+        ]
+      },
+      {
+        "name": "findStock",
+        "description": "[Inventory] All lots of the part family (every variant) with status, location and transfer time to line side.",
+        "required": [
+          "family"
+        ]
+      },
+      {
+        "name": "checkLot",
+        "description": "[Inventory] Status of one lot (holds, reservations, kits).",
+        "required": [
+          "lot"
+        ]
+      },
+      {
+        "name": "getS30Sequence",
+        "description": "[Planning] Electrical-integration (S30) slots, bays and weekend overtime capacity in the window.",
+        "required": []
+      },
+      {
+        "name": "proposeSequence",
+        "description": "[Planning] Deterministic resequencing and slack check for the affected trainsets (no stock substitutions decided here).",
+        "required": []
+      },
+      {
+        "name": "checkConfiguration",
+        "description": "[Configuration] Is a component variant approved for a product configuration?",
+        "required": [
+          "part",
+          "configuration"
+        ]
+      },
+      {
+        "name": "getDeviationProcedure",
+        "description": "[Configuration] Engineering procedure that applies when a non-approved variant is substituted.",
+        "required": [
+          "part",
+          "configuration"
+        ]
+      },
+      {
+        "name": "getExposure",
+        "description": "[Cost/Risk] Business exposure if no recovery action is taken, line by line with formulas.",
+        "required": []
+      },
+      {
+        "name": "costPlan",
+        "description": "[Cost/Risk] Recovery cost, residual exposure and value protected for the candidate plan.",
+        "required": []
+      }
+    ],
+    "sampleCall": {
+      "tool": "checkConfiguration",
+      "arguments": {
+        "part": "TIM-3300-A",
+        "configuration": "C-3"
+      },
+      "structuredContent": {
+        "part": "TIM-3300-A",
+        "configuration": "C-3",
+        "status": "NOT_APPROVED",
+        "baseline": "CB-C3-11",
+        "note": "Same housing and interfaces; firmware and control parameters differ. Use only under an engineering deviation."
+      }
+    }
+  },
+  "a2a": {
+    "supply": {
+      "name": "novarail_supply",
+      "description": "Find every unit of the delayed component that can reach the line in time: stock by lot and location, transfer lanes, supplier options. Never use held, reserved or kitted stock.",
+      "protocolVersion": "0.3.0",
+      "version": "1.0.0",
+      "skills": [
+        {
+          "id": "novarail_supply",
+          "name": "model",
+          "description": "Find every unit of the delayed component that can reach the line in time: stock by lot and location, transfer lanes, supplier options. Never use held, reserved or kitted stock. I am the Supply specialist of NovaRail's recovery team (a fictional rail manufacturer; all data is synthetic).\nFind every unit of the delayed component that can reach the line in time: stock by lot and location, transfer lanes, supplier options. Never use held, reserved or kitted stock.\nUse ONLY facts returned by my tools. Never invent a part, lot, quantity, date, cost or rule. If a tool fails, say so.\nDo not explain my reasoning. Reply with ONE JSON object and nothing else, with these keys:\n{\"allocations\":\"array\",\"uncovered\":\"array\",\"supplierOptions\":\"array\",\"summary\":\"string\"}\nRequired keys: allocations, uncovered, summary. \"summary\" is one short factual sentence.",
+          "tags": [
+            "llm"
+          ]
+        },
+        {
+          "id": "novarail_supply-getDisruption",
+          "name": "getDisruption",
+          "description": "[ERP] Supplier notice and the purchase-order line it changes, with pegging.",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        },
+        {
+          "id": "novarail_supply-getTrainsetStatus",
+          "name": "getTrainsetStatus",
+          "description": "[MES] Configuration, S30 slot, kit status and operations that need the delayed part for one trainset.",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        },
+        {
+          "id": "novarail_supply-findStock",
+          "name": "findStock",
+          "description": "[Inventory] All lots of the part family (every variant) with status, location and transfer time to line side.",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        },
+        {
+          "id": "novarail_supply-checkLot",
+          "name": "checkLot",
+          "description": "[Inventory] Status of one lot (holds, reservations, kits).",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        }
+      ],
+      "url": "http://127.0.0.1:18872/jsonrpc",
+      "preferredTransport": "JSONRPC",
+      "capabilities": {
+        "extensions": [],
+        "stateTransitionHistory": false,
+        "pushNotifications": false,
+        "streaming": true
+      },
+      "defaultInputModes": [
+        "text"
+      ],
+      "defaultOutputModes": [
+        "text"
+      ],
+      "additionalInterfaces": [
+        {
+          "url": "http://127.0.0.1:18872/jsonrpc",
+          "transport": "JSONRPC"
+        },
+        {
+          "url": "http://127.0.0.1:18872/rest",
+          "transport": "HTTP+JSON"
+        }
+      ]
+    },
+    "planning": {
+      "name": "novarail_planning",
+      "description": "Protect delivery commitments: S30 sequence, station capacity, schedule slack and weekend recovery for the trainsets the supply cannot cover in time.",
+      "protocolVersion": "0.3.0",
+      "version": "1.0.0",
+      "skills": [
+        {
+          "id": "novarail_planning",
+          "name": "model",
+          "description": "Protect delivery commitments: S30 sequence, station capacity, schedule slack and weekend recovery for the trainsets the supply cannot cover in time. I am the Production planning specialist of NovaRail's recovery team (a fictional rail manufacturer; all data is synthetic).\nProtect delivery commitments: S30 sequence, station capacity, schedule slack and weekend recovery for the trainsets the supply cannot cover in time.\nUse ONLY facts returned by my tools. Never invent a part, lot, quantity, date, cost or rule. If a tool fails, say so.\nDo not explain my reasoning. Reply with ONE JSON object and nothing else, with these keys:\n{\"actions\":\"array\",\"bayUse\":\"array\",\"summary\":\"string\"}\nRequired keys: actions, summary. \"summary\" is one short factual sentence.",
+          "tags": [
+            "llm"
+          ]
+        },
+        {
+          "id": "novarail_planning-getS30Sequence",
+          "name": "getS30Sequence",
+          "description": "[Planning] Electrical-integration (S30) slots, bays and weekend overtime capacity in the window.",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        },
+        {
+          "id": "novarail_planning-proposeSequence",
+          "name": "proposeSequence",
+          "description": "[Planning] Deterministic resequencing and slack check for the affected trainsets (no stock substitutions decided here).",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        }
+      ],
+      "url": "http://127.0.0.1:18873/jsonrpc",
+      "preferredTransport": "JSONRPC",
+      "capabilities": {
+        "extensions": [],
+        "stateTransitionHistory": false,
+        "pushNotifications": false,
+        "streaming": true
+      },
+      "defaultInputModes": [
+        "text"
+      ],
+      "defaultOutputModes": [
+        "text"
+      ],
+      "additionalInterfaces": [
+        {
+          "url": "http://127.0.0.1:18873/jsonrpc",
+          "transport": "JSONRPC"
+        },
+        {
+          "url": "http://127.0.0.1:18873/rest",
+          "transport": "HTTP+JSON"
+        }
+      ]
+    },
+    "cost": {
+      "name": "novarail_cost",
+      "description": "Quantify the business exposure if nothing is done and the cost, residual exposure and value protected of the candidate plan, with formulas.",
+      "protocolVersion": "0.3.0",
+      "version": "1.0.0",
+      "skills": [
+        {
+          "id": "novarail_cost",
+          "name": "model",
+          "description": "Quantify the business exposure if nothing is done and the cost, residual exposure and value protected of the candidate plan, with formulas. I am the Cost + risk specialist of NovaRail's recovery team (a fictional rail manufacturer; all data is synthetic).\nQuantify the business exposure if nothing is done and the cost, residual exposure and value protected of the candidate plan, with formulas.\nUse ONLY facts returned by my tools. Never invent a part, lot, quantity, date, cost or rule. If a tool fails, say so.\nDo not explain my reasoning. Reply with ONE JSON object and nothing else, with these keys:\n{\"exposure\":\"number\",\"recoveryCost\":\"number\",\"residualExposure\":\"number\",\"valueProtected\":\"number\",\"costLines\":\"array\",\"summary\":\"string\"}\nRequired keys: exposure, recoveryCost, residualExposure, valueProtected, summary. \"summary\" is one short factual sentence.",
+          "tags": [
+            "llm"
+          ]
+        },
+        {
+          "id": "novarail_cost-getExposure",
+          "name": "getExposure",
+          "description": "[Cost/Risk] Business exposure if no recovery action is taken, line by line with formulas.",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        },
+        {
+          "id": "novarail_cost-costPlan",
+          "name": "costPlan",
+          "description": "[Cost/Risk] Recovery cost, residual exposure and value protected for the candidate plan.",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        }
+      ],
+      "url": "http://127.0.0.1:18874/jsonrpc",
+      "preferredTransport": "JSONRPC",
+      "capabilities": {
+        "extensions": [],
+        "stateTransitionHistory": false,
+        "pushNotifications": false,
+        "streaming": true
+      },
+      "defaultInputModes": [
+        "text"
+      ],
+      "defaultOutputModes": [
+        "text"
+      ],
+      "additionalInterfaces": [
+        {
+          "url": "http://127.0.0.1:18874/jsonrpc",
+          "transport": "JSONRPC"
+        },
+        {
+          "url": "http://127.0.0.1:18874/rest",
+          "transport": "HTTP+JSON"
+        }
+      ]
+    },
+    "configuration": {
+      "name": "novarail_configuration",
+      "description": "Check every proposed component against the approved configuration of the product it goes into. Report conflicts and the applicable engineering procedure. Never authorise a deviation.",
+      "protocolVersion": "0.3.0",
+      "version": "1.0.0",
+      "skills": [
+        {
+          "id": "novarail_configuration",
+          "name": "model",
+          "description": "Check every proposed component against the approved configuration of the product it goes into. Report conflicts and the applicable engineering procedure. Never authorise a deviation. I am the Manufacturing / configuration specialist of NovaRail's recovery team (a fictional rail manufacturer; all data is synthetic).\nCheck every proposed component against the approved configuration of the product it goes into. Report conflicts and the applicable engineering procedure. Never authorise a deviation.\nUse ONLY facts returned by my tools. Never invent a part, lot, quantity, date, cost or rule. If a tool fails, say so.\nDo not explain my reasoning. Reply with ONE JSON object and nothing else, with these keys:\n{\"checks\":\"array\",\"conflict\":\"boolean\",\"procedure\":\"any\",\"summary\":\"string\"}\nRequired keys: checks, conflict, summary. \"summary\" is one short factual sentence.",
+          "tags": [
+            "llm"
+          ]
+        },
+        {
+          "id": "novarail_configuration-getTrainsetStatus",
+          "name": "getTrainsetStatus",
+          "description": "[MES] Configuration, S30 slot, kit status and operations that need the delayed part for one trainset.",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        },
+        {
+          "id": "novarail_configuration-checkConfiguration",
+          "name": "checkConfiguration",
+          "description": "[Configuration] Is a component variant approved for a product configuration?",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        },
+        {
+          "id": "novarail_configuration-getDeviationProcedure",
+          "name": "getDeviationProcedure",
+          "description": "[Configuration] Engineering procedure that applies when a non-approved variant is substituted.",
+          "tags": [
+            "llm",
+            "tools"
+          ]
+        }
+      ],
+      "url": "http://127.0.0.1:18875/jsonrpc",
+      "preferredTransport": "JSONRPC",
+      "capabilities": {
+        "extensions": [],
+        "stateTransitionHistory": false,
+        "pushNotifications": false,
+        "streaming": true
+      },
+      "defaultInputModes": [
+        "text"
+      ],
+      "defaultOutputModes": [
+        "text"
+      ],
+      "additionalInterfaces": [
+        {
+          "url": "http://127.0.0.1:18875/jsonrpc",
+          "transport": "JSONRPC"
+        },
+        {
+          "url": "http://127.0.0.1:18875/rest",
+          "transport": "HTTP+JSON"
+        }
+      ]
+    }
+  }
+}

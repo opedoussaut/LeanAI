@@ -44,3 +44,29 @@ export function filmFacts(story) {
     valueAfterEngineering: kEur(s.engineeringValidated.valueProtected)
   };
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Second film — "Value first, built on Google's agentic stack" (media/film-google.html). Same story source.
+export const GOOGLE_DURATION = 80;
+export const GOOGLE_SCENES = { open: 0, gate: 7, ground: 17, adk: 22, a2a: 29, mcp: 37, contract: 45, outcome: 52, twist: 62, end: 71 };
+
+export function googleFilmFacts(story, stack) {
+  const s = story, e = s.economics;
+  const perEuro = e.valueProtected / s.ai.costEur;
+  return {
+    notice: { id: s.disruption.notice, line: `${s.disruption.qty} × ${s.disruption.part} · traction inverter modules`, delay: `${s.disruption.delayDays} days late`, affected: s.affected.map(a => a.id).join(' · ') },
+    routine: { line: `${s.decide.routine.part} · ${s.decide.routine.delayDays} day late`, atStake: `€${n(s.decide.routine.exposure)}`, aiCost: `€${s.decide.routine.aiCostEur.toFixed(2)}`, verdict: s.decide.routine.verdict, path: s.decide.routine.path },
+    main: { atStake: kEur(e.exposure), verdict: s.decide.verdict, path: s.decide.path, model: `${n(s.decide.parameters)}-parameter decision model · in the browser · €0` },
+    ground: { raw: n(s.reduce.rawRecords), evidence: String(s.reduce.evidenceItems), pct: `${s.reduce.reductionPercentage.toFixed(1)} %` },
+    agents: Object.entries(stack.a2a).map(([id, c]) => ({ id, name: c.name, protocol: c.protocolVersion, tools: c.skills.filter(k => k.name !== 'model').map(k => k.name), transport: c.preferredTransport })),
+    tools: stack.mcp.tools.map(t => ({ name: t.name, system: (t.description.match(/^\[([^\]]+)\]/) ?? [])[1] ?? '' })),
+    sample: stack.mcp.sampleCall,
+    packages: stack.packages, model: stack.model,
+    plan: s.plan.map(p => ({ trainset: p.trainset, kind: p.kind, protected: p.protected })),
+    values: { protected: kEur(e.valueProtected), cost: kEur(e.recoveryCost), exposure: kEur(e.exposure), residual: kEur(e.residualExposure) },
+    ai: { cost: `€${s.ai.costEur.toFixed(2)}`, calls: s.ai.modelCalls, tools: s.ai.toolCalls, messages: s.ai.a2aMessages, estimated: s.ai.estimated },
+    perEuro: perEuro >= 1e6 ? `${(perEuro / 1e6).toFixed(1)} million` : n(perEuro),
+    conflict: s.conflict ? { trainset: s.conflict.trainset, procedure: s.conflict.procedure } : null,
+    states: s.states
+  };
+}

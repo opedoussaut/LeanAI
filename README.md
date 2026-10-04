@@ -125,6 +125,7 @@ for an engineering review, and a person approves.
 * Simulated by default (no key, no model called, labelled); live with Gemini through Google ADK when you run
   `GEMINI_API_KEY=… npm run start:live` locally (optional dependencies; never on Pages).
 * Film: `media/leanai-industrial-recovery-75s.mp4` (`npm run film`, `npm run film:preview`), generated from the same data.
+* Second film: `media/leanai-google-agentic-stack-80s.mp4` (`npm run film:google`) — value first, then Gemini, ADK, A2A and MCP doing the work; agent cards and MCP tools recorded from the running stack.
 * Details: [`docs/INDUSTRIAL-RECOVERY.md`](docs/INDUSTRIAL-RECOVERY.md) · timing and voiceover: [`docs/film-timing.md`](docs/film-timing.md).
 
 ## Protocol Lab (previous workshop, preserved)

@@ -14,7 +14,9 @@
     "build": "node scripts/build.mjs",
     "start:live": "node server/rail-live.mjs",
     "film:preview": "node scripts/film.mjs --preview",
-    "film": "node scripts/film.mjs"
+    "film": "node scripts/film.mjs",
+    "film:google": "node scripts/film.mjs --google",
+    "film:google:preview": "node scripts/film.mjs --google --preview"
   },
   "optionalDependencies": {
     "@a2a-js/sdk": "1.3.0",

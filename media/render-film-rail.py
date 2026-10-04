@@ -1,13 +1,20 @@
-# Renders the Industrial Recovery film frame by frame (Playwright → ffmpeg), synthesises the soundtrack and muxes both.
-# Called by `npm run film` (which serves the repository); can also be run directly with the film URL as argument.
+# Renders an Industrial Recovery film frame by frame (Playwright → ffmpeg), synthesises its soundtrack and muxes both.
+# Called by `npm run film` / `npm run film:google` (which serve the repository); can also be run directly:
+#   python3 media/render-film-rail.py <film URL> [recovery|google]
 # Resumable: frames are written as JPEG files first, so an interrupted render continues where it stopped.
 import asyncio, os, subprocess, sys, glob
 from playwright.async_api import async_playwright
 FPS = 30
 HERE = os.path.dirname(os.path.abspath(__file__))
-URL = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:8812/media/film-rail.html?render=1'
-FRAMES = os.path.join(HERE, '.frames-rail')
-OUT = os.path.join(HERE, 'leanai-industrial-recovery-75s.mp4')
+FILMS = {  # name → (page, frame cache, output, soundtrack script, poster time in s)
+    'recovery': ('film-rail.html', '.frames-rail', 'leanai-industrial-recovery-75s.mp4', 'sound-film-rail.py', 79),
+    'google': ('film-google.html', '.frames-google', 'leanai-google-agentic-stack-80s.mp4', 'sound-film-google.py', 57),
+}
+FILM = sys.argv[2] if len(sys.argv) > 2 else 'recovery'
+PAGE, FR, OUTNAME, SOUND, POSTER = FILMS[FILM]
+URL = sys.argv[1] if len(sys.argv) > 1 else f'http://127.0.0.1:8812/media/{PAGE}?render=1'
+FRAMES = os.path.join(HERE, FR)
+OUT = os.path.join(HERE, OUTNAME)
 
 async def frames():
     os.makedirs(FRAMES, exist_ok=True)
@@ -29,12 +36,12 @@ async def frames():
 if __name__ == '__main__':
     n = asyncio.run(frames())
     assert len(glob.glob(os.path.join(FRAMES, '*.jpg'))) >= n, 'missing frames'
-    silent = os.path.join(HERE, 'silent-rail.mp4'); wav = os.path.join(HERE, 'sound-film-rail.wav')
+    silent = os.path.join(HERE, f'silent-{FILM}.mp4'); wav = os.path.join(HERE, f'sound-{FILM}.wav')
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-framerate', str(FPS), '-i', os.path.join(FRAMES, '%05d.jpg'), '-frames:v', str(n),
                     '-vf', 'scale=1920:1080', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-preset', 'slow', '-movflags', '+faststart', silent], check=True)
-    subprocess.run(['python3', os.path.join(HERE, 'sound-film-rail.py'), wav], check=True)
+    subprocess.run(['python3', os.path.join(HERE, SOUND), wav], check=True)
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', silent, '-i', wav, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', OUT], check=True)
-    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-ss', '79', '-i', OUT, '-frames:v', '1', '-q:v', '3', OUT.replace('.mp4', '.jpg')], check=True)
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-ss', str(POSTER), '-i', OUT, '-frames:v', '1', '-q:v', '3', OUT.replace('.mp4', '.jpg')], check=True)
     os.remove(silent); os.remove(wav)
     for f in glob.glob(os.path.join(FRAMES, '*.jpg')): os.remove(f)
     os.rmdir(FRAMES)

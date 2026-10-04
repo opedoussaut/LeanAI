@@ -117,10 +117,34 @@ publish their A2A agent cards. The page shows **LIVE** only when the local endpo
 | Assets | original canvas drawings (assembly hall, NR-E trainset, data flows, specialists, S30 plan); `FOOTAGE-SLOT` marks where a licensed hall plate could replace the drawn background |
 | Timing, audio cues, voiceover | [`docs/film-timing.md`](film-timing.md) |
 
+### Second film — value first, built on Google's agentic stack
+
+`media/leanai-google-agentic-stack-80s.mp4` — 80 s, 1920×1080, 30 fps, original soundtrack (`media/sound-film-google.py`).
+Where the first film tells the recovery story, this one shows **why AI runs at all** and **how Google's stack carries it**:
+
+| Time | Scene | What it shows |
+|---|---|---|
+| 0–7 s | Business case | *Every AI project should start with a business case. Not with a model.* · the supplier notice |
+| 7–17 s | Value gate | two notices the same morning: routine (€0 at stake → deterministic rules, no model call) vs inverter batch (€420K → agentic reasoning) |
+| 17–22 s | Grounding | 18,407 records → 76 evidence items; Gemini never sees the raw ERP |
+| 22–29 s | ADK | the real `LlmAgent` + `MCPToolset` code from `src/providers/gemini-adk.mjs`, and the four `novarail_*` specialists |
+| 29–37 s | A2A | the agent cards the specialists publish through ADK `toA2a` (protocol, transport, skills) |
+| 37–45 s | MCP | six enterprise systems, ten tools, and a real `tools/call checkConfiguration` answer |
+| 45–52 s | Contract | Gemini returns JSON → contract check → deterministic validation → usage measured · *Models are replaceable. The business architecture is not.* |
+| 52–62 s | Outcome | €389K protected · AI cost €0.06 · value per € of AI |
+| 62–71 s | Twist | configuration conflict caught by an MCP tool → Gemini proposed → engineering → human |
+| 71–80 s | End | *Value first. AI where it pays. Engineering always.* |
+
+Render with `npm run film:google` (preview: `npm run film:google:preview`). Figures come from `railStory()` through
+`googleFilmFacts()`; the agent cards, MCP tool list, sample call and package versions come from
+`evidence/google/stack.json`, recorded from the running ADK agents and MCP server by `node scripts/record-google-stack.mjs`
+(no API key needed). The agent run itself is a **deterministic replay** and the film says so; re-record with a Gemini key to
+show measured tokens.
+
 ## 7. Tests
 
 `test/rail-*.test.mjs`: dataset determinism and size; reduction and retained evidence; decision-model parity, routing
 (agentic vs routine) and input sensitivity; MCP tools and invalid requests; economics; validation of infeasible plans;
 engineering escalation; governance guards; provider contract and modes; live plumbing (skipped when the optional packages
-are not installed); film/app synchronisation and timing; a scan that keeps the repository free of out-of-scope industry and real-manufacturer references; and the
+are not installed); film/app synchronisation and timing (both films); a scan that keeps the repository free of out-of-scope industry and real-manufacturer references; and the
 AI factory regression.
